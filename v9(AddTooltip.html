@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <title>拼图中国v9
+    </title>
+    <script src="https://unpkg.com/maplibre-gl@3.x/dist/maplibre-gl.js"></script>
+    <link href="https://unpkg.com/maplibre-gl@3.x/dist/maplibre-gl.css" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #f0f0f2;
+            transition: background 0.3s ease;
+            overflow: hidden;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+        }
+
+        .ui-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: saturate(180%) blur(20px);
+            padding: 20px;
+            border-radius: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            color: #1d1d1f;
+            z-index: 10;
+            width: 280px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+            max-height: calc(100vh - 40px);
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+
+        .ui-panel::-webkit-scrollbar {
+            display: none;
+        }
+
+        .section-title {
+            font-size: 11px;
+            font-weight: 600;
+            color: #86868b;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 10px;
+        }
+
+        .btn-apple {
+            background: #0071e3;
+            color: white;
+            border-radius: 980px;
+            padding: 8px 16px;
+            font-weight: 500;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            width: 100%;
+            text-align: center;
+        }
+
+        .btn-apple:hover {
+            background: #0077ed;
+            transform: scale(1.02);
+        }
+
+        .btn-secondary {
+            background: rgba(0, 0, 0, 0.05);
+            color: #1d1d1f;
+            border-radius: 980px;
+            padding: 8px 16px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            width: 100%;
+            text-align: center;
+        }
+
+        .btn-tab {
+            flex: 1;
+            padding: 6px;
+            font-size: 11px;
+            border-radius: 8px;
+            transition: all 0.2s;
+            text-align: center;
+            cursor: pointer;
+        }
+
+        .btn-tab.active {
+            background: white;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            font-weight: 600;
+        }
+
+        .level-btn {
+            flex: 1;
+            padding: 4px 2px;
+            font-size: 10px;
+            border-radius: 6px;
+            color: #86868b;
+            transition: all 0.2s;
+            text-align: center;
+            cursor: pointer;
+        }
+
+        .level-btn.active {
+            background: #0071e3;
+            color: white;
+            font-weight: 600;
+        }
+
+        .apple-color-input {
+            width: 100%;
+            height: 32px;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            padding: 0;
+            background: none;
+            cursor: pointer;
+            border-radius: 8px;
+        }
+
+        .control-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 20px;
+            border-radius: 16px;
+            z-index: 100;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            font-family: sans-serif;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            width: 240px;
+        }
+
+
+        /* 属性编辑面板主容器 - 右键点击物体时出现 */
+        #dt-customizer {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: saturate(180%) blur(20px);
+            padding: 20px;
+            border-radius: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            width: 280px;
+            z-index: 1000;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
+            display: none;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            animation: dt-fade-in 0.3s ease-out;
+        }
+
+        @keyframes dt-fade-in {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* 属性行布局 */
+        .dt-row {
+            margin-bottom: 14px;
+        }
+
+        /* 标签样式 */
+        .dt-row label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 11px;
+            color: #86868b;
+            margin-bottom: 6px;
+            font-weight: 500;
+        }
+
+        /* 工具按钮选中后的视觉提示类 */
+        /* 你需要在 JS 中通过 classList.add('dt-tool-active') 来调用它 */
+        .dt-tool-active {
+            background-color: #0071e3 !important;
+            color: white !important;
+            border-color: #0071e3 !important;
+            box-shadow: 0 4px 12px rgba(0, 113, 227, 0.3);
+            transform: translateY(-1px);
+        }
+
+        /* 这里的样式是为了确保工具按钮在被 JavaScript 切换 class 时能正常显示颜色 */
+        .dt-tool-btn-active {
+            background-color: #0071e3 !important;
+            color: white !important;
+            border-color: #0071e3 !important;
+        }
+
+        /* 滑块样式定制 */
+        .dt-range {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 4px;
+            background: rgba(0, 0, 0, 0.08);
+            border-radius: 2px;
+            outline: none;
+            margin: 10px 0;
+        }
+
+        .dt-range::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #ffffff;
+            border: 0.5px solid rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+            transition: transform 0.1s;
+        }
+
+        .dt-range::-webkit-slider-thumb:active {
+            transform: scale(1.2);
+        }
+
+        /* 颜色选择器适配 */
+        .dt-color-picker {
+            width: 100%;
+            height: 32px;
+            border: none;
+            border-radius: 8px;
+            background: none;
+            cursor: pointer;
+        }
+
+        /* 开关组件 */
+        .dt-toggle {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            font-size: 12px;
+            color: #1d1d1f;
+        }
+
+        .dt-toggle input {
+            display: none;
+        }
+
+        .dt-toggle-box {
+            width: 36px;
+            height: 20px;
+            background: #e5e5e7;
+            border-radius: 10px;
+            position: relative;
+            transition: background 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .dt-toggle-box:after {
+            content: '';
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            background: white;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .dt-toggle input:checked+.dt-toggle-box {
+            background: #34c759;
+        }
+
+        .dt-toggle input:checked+.dt-toggle-box:after {
+            transform: translateX(16px);
+        }
+
+        /* 删除按钮样式 */
+        #dt-delete-btn {
+            transition: all 0.2s;
+        }
+
+        #dt-delete-btn:hover {
+            background-color: #fee2e2;
+            color: #ef4444;
+        }
+
+        /* 悬浮tooltip */
+        /* 地名悬浮窗样式 */
+        .map-tooltip {
+            position: absolute;
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            border-radius: 12px;
+            pointer-events: none;
+            /* 关键：不遮挡鼠标事件 */
+            font-size: 13px;
+            font-weight: 600;
+            color: #1d1d1f;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            display: none;
+            /* 默认隐藏 */
+            z-index: 9999;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="ui-panel pointer-events-auto">
+        <h1 class="text-lg font-semibold tracking-tight mb-0.5">拼图中国</h1>
+        <p class="text-[9px] text-gray-400 mb-4 tracking-wide uppercase">Creative Workspace</p>
+
+        <div id="status-card" class="bg-white/40 p-2.5 rounded-2xl border border-black/5 mb-5 space-y-2">
+            <div class="flex justify-between items-center text-xs">
+                <span class="text-gray-400">当前区域</span>
+                <span id="current-name" class="font-medium text-gray-800 text-right"></span>
+            </div>
+            <div class="flex gap-1 bg-black/5 p-0.5 rounded-lg">
+                <div id="lvl-p" onclick="setLevel('province')" class="level-btn active">省级</div>
+                <div id="lvl-c" onclick="setLevel('city')" class="level-btn">市级</div>
+                <div id="lvl-d" onclick="setLevel('district')" class="level-btn">区级</div>
+            </div>
+            <div class="flex justify-between items-center border-t border-black/5 pt-1.5">
+                <span class="text-[10px] text-gray-400 font-medium">数据状态</span>
+                <span id="data-source"
+                    class="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-100 font-medium">就绪</span>
+            </div>
+        </div>
+
+        <div class="mb-5">
+            <h2 class="section-title text-orange-600">模式切换</h2>
+            <div class="flex gap-2 my-4">
+                <button onclick="changeMainMode('roam')" id="btn-roam"
+                    class="flex-1 py-2 rounded-xl bg-black text-white text-xs font-semibold">漫游模式</button>
+                <button onclick="changeMainMode('tool')" id="btn-tool"
+                    class="flex-1 py-2 rounded-xl bg-gray-100 text-gray-800 text-xs font-semibold">工具模式</button>
+            </div>
+
+            <!-- 工具箱二级菜单（默认隐藏） -->
+            <div id="drawing-tools-sub" class="hidden space-y-3 border-t border-black/5 pt-3">
+                <div class="grid grid-cols-3 gap-3 px-2 w-full">
+                    <!-- 直线工具 -->
+                    <button id="tool-line" onclick="dt.setTool('line')"
+                        class="w-full h-10 flex items-center justify-center bg-white/60 backdrop-blur-md rounded-xl border border-white/50 shadow-sm transition-all hover:scale-105 active:scale-95 dt-btn-active">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1d1d1f" stroke-width="2.5"
+                            stroke-linecap="round">
+                            <line x1="5" y1="19" x2="19" y2="5"></line>
+                        </svg>
+                    </button>
+
+                    <!-- 箭头工具 -->
+                    <button id="tool-arrow" onclick="dt.setTool('arrow')"
+                        class="w-full h-10 flex items-center justify-center bg-white/60 backdrop-blur-md rounded-xl border border-white/50 shadow-sm transition-all hover:scale-105 active:scale-95">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1d1d1f" stroke-width="2.5"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                            <polyline points="12 5 19 12 12 19"></polyline>
+                        </svg>
+                    </button>
+
+                    <!-- 圆圈工具 -->
+                    <button id="tool-circle" onclick="dt.setTool('circle')"
+                        class="w-full h-10 flex items-center justify-center bg-white/60 backdrop-blur-md rounded-xl border border-white/50 shadow-sm transition-all hover:scale-105 active:scale-95">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1d1d1f" stroke-width="2.5"
+                            stroke-linecap="round">
+                            <circle cx="12" cy="12" r="9"></circle>
+                        </svg>
+                    </button>
+                </div>
+                <button onclick="dt.clear()"
+                    class="w-full py-1.5 text-red-500 text-[10px] bg-red-50 rounded-lg">清空绘图</button>
+            </div>
+
+
+            <h2 class="section-title text-blue-600 pt-3">背景样式</h2>
+            <div class="bg-gray-100/50 p-1 rounded-xl flex mb-3">
+                <div id="tab-osm" onclick="setBackgroundMode('osm')" class="btn-tab active">底图模式</div>
+                <div id="tab-solid" onclick="setBackgroundMode('solid')" class="btn-tab">单色模式</div>
+            </div>
+            <div id="solid-controls" class="hidden">
+                <input type="color" id="bg-custom-picker" value="#f0f0f2">
+            </div>
+        </div>
+
+        <div id="feature-customization" class="mb-5 hidden animate-in slide-in-from-top-2 duration-300">
+            <h2 class="section-title text-indigo-600"> 板块定制</h2>
+            <div class="bg-indigo-50/50 p-2.5 rounded-xl border border-indigo-100/50 space-y-3">
+                <div class="flex justify-between items-center mb-2">
+                    <span id="target-feature-name" class="text-[11px] font-semibold text-indigo-900">未选择区域</span>
+                    <button onclick="hideCustomizer()" class="text-indigo-400 hover:text-indigo-600">✕</button>
+                </div>
+
+                <div id="palette-container"></div>
+            </div>
+        </div>
+
+        <div class="space-y-2">
+            <button onclick="zoomToSelection()"
+                class="btn-apple text-[11px] bg-indigo-600 hover:bg-indigo-700">聚焦已选区域</button>
+            <button onclick="clearSelection()" class="btn-secondary text-[11px]">重置所有板块</button>
+            <button onclick="resetView()" class="btn-secondary text-[11px]">恢复默认视角</button>
+            <button onclick="goBack()"
+                class="flex items-center justify-center gap-2 w-full py-1.5 text-[11px] text-gray-500 hover:text-gray-800 transition-colors mt-1">
+                - - - - - - - - - - - - - - - - - - - - - - -
+            </button>
+            <button onclick="exportMap()"
+                class="btn-apple text-[11px] bg-emerald-600 hover:bg-emerald-700 flex items-center justify-center gap-2">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+                </svg>
+                导出当前地图 (PNG)
+            </button>
+        </div>
+
+        <div class="mt-5 pt-4 border-t border-black/5 text-[9px] text-gray-400 leading-relaxed">
+            <p>• 左键：选取/还原 (还原时重置颜色)</p>
+            <p>• 右键：在面板中修改当前板块颜色</p>
+        </div>
+    </div>
+
+    <div id="map"></div>
+    <div id="tooltip" class="map-tooltip"></div>
+
+    <script>
+        const PANEL_PADDING = { top: 40, bottom: 40, left: 180, right: 40 };
+        const INITIAL_VIEW = { center: [98, 35], zoom: 3.7, pitch: 45, bearing: 0 };
+
+        // 动画
+        let states = {}; // 存储每个地块的实时高度和底座高度
+
+        const BASE_H = 70000;      // 默认顶部高度
+        const BASE_LOW = 0;        // 默认底部位置
+
+        const TARGET_H = 170000;    // 抬升后的顶部高度
+        const TARGET_LOW = 80000;  // 抬升后的底部位置
+
+        const LERP_SPEED = 0.07;   // 动画速度 (0-1)
+
+
+        let elevatedIds = new Set();
+        let currentTargetId = null;
+        let currentGeoData = null;
+
+        let currentAdcode = '100000';
+        let currentLevel = 'province';
+        let bgMode = 'osm';
+        let historyStack = [];
+        let colorMgr;
+
+        let isMouseDown = false;
+        let startPos = { x: 0, y: 0 };
+
+        const map = new maplibregl.Map({
+            container: 'map',
+            preserveDrawingBuffer: true,
+            style: {
+                version: 8,
+                sources: {
+                    'base-tiles': {
+                        type: 'raster',
+                        tiles: ['https://a.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}.png'],
+                        tileSize: 256,
+                    }
+                },
+                layers: [
+                    {
+                        id: 'background-layer',
+                        type: 'background',
+                        paint: { 'background-color': '#f0f0f2' }
+                    },
+                    { id: 'base-layer', type: 'raster', source: 'base-tiles', paint: { 'raster-opacity': 0.4 } }
+                ]
+            },
+            ...INITIAL_VIEW,
+            padding: PANEL_PADDING,
+            antialias: true,
+            // 增加点击容差，减少误判
+            clickTolerance: 10
+        });
+
+        map.on('load', () => {
+            updateMapLevel('100000', '中国', true);
+            window.dt = new DrawingTools(map, { height: 150000 });
+
+            colorMgr = new ColorManager(map, window.dt);
+
+            map.jumpTo({ ...INITIAL_VIEW, padding: PANEL_PADDING });
+
+            map.on('mousedown', (e) => {
+                isMouseDown = true;
+                startPos = { x: e.point.x, y: e.point.y };
+            });
+
+            map.on('mouseup', (e) => {
+                if (!isMouseDown) return;
+
+                // 【新增修改点】：如果当前处于绘图工具模式，且不是“选择”工具，则禁止地图抬升逻辑
+                // 这样点击地图只会触发画线、画箭头，而不会让省份跳起来
+                if (window.dt && window.dt.mainMode === 'tool' && window.dt.currentTool !== 'select') {
+                    isMouseDown = false;
+                    return;
+                }
+
+                // 计算鼠标位移，防止拖拽地图时触发点击
+                const dist = Math.sqrt(Math.pow(e.point.x - startPos.x, 2) + Math.pow(e.point.y - startPos.y, 2));
+
+                if (dist < 6) {
+                    // 优化：使用小范围矩形探测，提高命中率，特别是在3D倾斜状态下
+                    const bbox = [
+                        [e.point.x - 4, e.point.y - 4],
+                        [e.point.x + 4, e.point.y + 4]
+                    ];
+
+                    const features = map.queryRenderedFeatures(bbox, { layers: ['china-3d'] });
+
+                    if (features.length > 0) {
+                        const feature = features[0];
+                        if (e.originalEvent.button === 0) {
+                            handleFeatureClick(feature);
+                        } else if (e.originalEvent.button === 2) {
+                            handleRightClick(feature);
+                        }
+                    }
+                }
+                isMouseDown = false;
+            });
+
+            map.on('contextmenu', e => e.preventDefault());
+            map.on('mouseenter', 'china-3d', () => map.getCanvas().style.cursor = 'pointer');
+            map.on('mouseleave', 'china-3d', () => map.getCanvas().style.cursor = '');
+
+            // tooltip
+
+            const tooltip = document.getElementById('tooltip');
+
+            // 监听鼠标在地图上的移动
+            map.on('mousemove', 'china-3d', (e) => {
+                if (e.features.length > 0) {
+                    const feature = e.features[0];
+                    const name = feature.properties.name || "未知区域";
+
+                    // 更新内容
+                    tooltip.innerText = name;
+
+                    // 显示并定位 (偏移 15px 避免挡住准星)
+                    tooltip.style.display = 'block';
+                    tooltip.style.left = (e.point.x + 15) + 'px';
+                    tooltip.style.top = (e.point.y + 15) + 'px';
+                }
+                if (window.dt && window.dt.mainMode === 'tool') {
+                    tooltip.style.display = 'none';
+                    return;
+                }
+            });
+
+            // 鼠标离开 3D 图层时隐藏
+            map.on('mouseleave', 'china-3d', () => {
+                tooltip.style.display = 'none';
+            });
+
+            // 别忘了启动它
+            startAnimationLoop();
+        });
+
+
+
+        // ！！！！！！！！！！！！！！函数！！！！！！！！！！！！
+        // --- 导出函数 ---
+        function exportMap() {
+            try {
+                const originalDPR = window.devicePixelRatio;
+                // 建议最高设为 4 或 5，10 倍的分辨率可能会让显存溢出导致黑屏
+                const exportDPR = 4;
+
+                // 1. 修改 DPR
+                Object.defineProperty(window, 'devicePixelRatio', {
+                    get: function () { return exportDPR; },
+                    configurable: true
+                });
+
+                // 2. 核心：调整地图画布尺寸并强制重绘
+                map.resize(); // 通知地图容器尺寸变化
+
+                // 3. 使用 render 监听器确保渲染完成
+                map.once('render', () => {
+                    const canvas = map.getCanvas();
+                    const dataUrl = canvas.toDataURL("image/png");
+
+                    const link = document.createElement('a');
+                    const timestamp = new Date().getTime();
+                    link.download = `拼图中国_超清导出_${timestamp}.png`;
+                    link.href = dataUrl;
+                    link.click();
+
+                    // 4. 恢复原状
+                    Object.defineProperty(window, 'devicePixelRatio', {
+                        get: function () { return originalDPR; },
+                        configurable: true
+                    });
+                    map.resize();
+                    console.log("导出完成，已恢复 DPR");
+                });
+
+                // 触发渲染
+                map.triggerRepaint();
+
+            } catch (err) {
+                console.error("导出失败:", err);
+                alert("导出失败，请降低 exportDPR 后重试。");
+            }
+        }
+
+        async function setLevel(level) {
+            if (currentLevel === level) return;
+            clearSelection();
+            currentLevel = level;
+            ['p', 'c', 'd'].forEach(id => document.getElementById(`lvl-${id}`).classList.remove('active'));
+            const idMap = { province: 'p', city: 'c', district: 'd' };
+            document.getElementById(`lvl-${idMap[level]}`).classList.add('active');
+            await updateMapLevel(currentAdcode, document.getElementById('current-name').innerText, true);
+        }
+
+        function updateStatus(text, type) {
+            const el = document.getElementById('data-source');
+            if (!el) return;
+            el.innerText = text;
+            const cls = {
+                loading: 'bg-amber-50 text-amber-600 border-amber-100',
+                online: 'bg-emerald-50 text-emerald-600 border-emerald-100',
+                error: 'bg-red-50 text-red-600 border-red-100'
+            };
+            el.className = `text-[10px] px-2 py-0.5 rounded-full border font-medium ${cls[type] || 'bg-blue-50 text-blue-600 border-blue-100'}`;
+        }
+
+        async function fetchMapData(adcode) {
+            updateStatus('正在查询数据...', 'loading');
+
+            // 1. 尝试获取本地数据
+            const localLevelMap = {
+                'province': 'province_geo.geojson',
+                'city': 'city_geo.geojson',
+                'district': 'district_geo.geojson'
+            };
+            const localPath = `./shp/${localLevelMap[currentLevel]}`;
+
+            try {
+                const localRes = await fetch(localPath);
+                if (localRes.ok) {
+                    const data = await localRes.json();
+                    updateStatus('成功加载本地SHP数据', 'online');
+                    return data;
+                }
+            } catch (e) {
+                console.warn('本地文件读取失败，尝试在线获取...');
+            }
+
+            // 2. 如果本地失败，尝试获取阿里云在线数据
+            // 注意：区县级(district)通常使用 adcode.json，省市级使用 adcode_full.json
+            let aliPath = `https://geo.datav.aliyun.com/areas_v3/bound/${adcode}_full.json`;
+            if (currentLevel === 'district') {
+                aliPath = `https://geo.datav.aliyun.com/areas_v3/bound/${adcode}.json`;
+            }
+
+            try {
+                updateStatus('本地文件缺失，正在从云端加载...', 'loading');
+                const aliRes = await fetch(aliPath);
+
+                // 如果 full.json 找不到（有时市级也可能没有子区域数据），尝试请求基础版
+                if (!aliRes.ok && aliPath.includes('_full')) {
+                    const backupPath = `https://geo.datav.aliyun.com/areas_v3/bound/${adcode}.json`;
+                    const backupRes = await fetch(backupPath);
+                    if (backupRes.ok) {
+                        const data = await backupRes.json();
+                        updateStatus('在线数据加载成功(基础版)', 'online');
+                        return data;
+                    }
+                }
+
+                if (aliRes.ok) {
+                    const data = await aliRes.json();
+                    updateStatus('在线数据加载成功', 'online');
+                    return data;
+                }
+            } catch (err) {
+                console.error('在线获取数据失败:', err);
+            }
+
+            // 3. 全部失败
+            updateStatus('地图数据加载失败', 'error');
+            return null;
+        }
+
+        async function updateMapLevel(adcode, name, skipHistory = false) {
+            const data = await fetchMapData(adcode);
+            if (!data) return;
+
+            // 裂开
+
+            let shrinkDistance = 0.5; // 默认值
+
+            if (currentLevel === 'province') {
+                // 省级地块大，缝隙可以稍微宽一点，突出拼图感
+                shrinkDistance = -3;
+            } else if (currentLevel === 'city') {
+                // 市级地块中等，缝隙减小
+                shrinkDistance = -1.5;
+            } else if (currentLevel === 'district') {
+                // 区县级地块非常细碎，缝隙必须极小，否则地块会缩没了
+                shrinkDistance = -0.5;
+            }
+
+            // --- 东非大裂谷 ---
+            // 通过把地块缩进 0.5 公里，用地块间的“裂缝”代替“线条”
+            data.features = data.features.map((f, index) => {
+                try {
+                    // 使用动态计算的 shrinkDistance
+                    const shrunk = turf.buffer(f, shrinkDistance, { units: 'kilometers' });
+
+                    if (shrunk) {
+                        shrunk.id = index;
+                        shrunk.properties = f.properties;
+                        return shrunk;
+                    }
+                } catch (e) {
+                    console.warn("地块收缩失败，返回原形状:", f.properties.name, e);
+                }
+
+                // 如果收缩失败（比如地块太小无法进一步收缩），则保留原样并分配ID
+                f.id = index;
+                return f;
+            });
+
+            if (!skipHistory && adcode !== currentAdcode) {
+                historyStack.push({ adcode: currentAdcode, name: document.getElementById('current-name').innerText });
+            }
+
+            data.features.forEach((f, index) => {
+                f.id = index; // 【关键：必须给 feature 对象本身赋值 id】
+                states[index] = { currH: BASE_H, currB: BASE_LOW, elevated: false };
+            });
+
+            currentGeoData = data;
+            currentAdcode = adcode;
+            document.getElementById('current-name').innerText = name || '中国';
+
+            if (map.getSource('china-source')) {
+                map.getSource('china-source').setData(data);
+            } else {
+                map.addSource('china-source', { type: 'geojson', data: data });
+                map.addLayer({
+                    id: 'china-3d',
+                    type: 'fill-extrusion',
+                    source: 'china-source',
+                    paint: {
+                        'fill-extrusion-height': ['feature-state', 'h'],
+                        'fill-extrusion-base': ['feature-state', 'b'],
+                        'fill-extrusion-color': [
+                            'case',
+                            ['boolean', ['feature-state', 'elevated'], false],
+                            ['coalesce', ['feature-state', 'customColor'], '#0071e3'],
+                            '#f9f9fb'
+                        ],
+                        'fill-extrusion-opacity': 1.0
+                    }
+                });
+
+                // map.addLayer({ id: 'line-bold', type: 'line', source: 'china-source', paint: { 'line-color': '#d2d2d7', 'line-width': 0.8, 'line-opacity': 0.2 } });
+                // map.addLayer({ id: 'line-medium', type: 'line', source: 'china-source', paint: { 'line-color': '#d2d2d7', 'line-width': 0.6, 'line-opacity': 0.2 } });
+                // map.addLayer({ id: 'line-thin', type: 'line', source: 'china-source', paint: { 'line-color': '#d2d2d7', 'line-width': 0.4, 'line-opacity': 0.2 } });
+            }
+
+            map.setPaintProperty('line-bold', 'line-opacity', 0.8);
+            map.setPaintProperty('line-medium', 'line-opacity', (currentLevel === 'city' || currentLevel === 'district') ? 0.5 : 0);
+            map.setPaintProperty('line-thin', 'line-opacity', (currentLevel === 'district') ? 0.3 : 0);
+
+            clearSelection();
+        }
+
+        function changeMainMode(mode) {
+            if (!window.dt) return;
+
+            dt.setMainMode(mode);
+
+            const isTool = mode === 'tool';
+            document.getElementById('drawing-tools-sub').classList.toggle('hidden', !isTool);
+
+            // 切换按钮样式
+            const btnRoam = document.getElementById('btn-roam');
+            const btnTool = document.getElementById('btn-tool');
+
+            if (isTool) {
+                btnTool.className = "flex-1 py-2 rounded-xl bg-black text-white text-xs font-semibold";
+                btnRoam.className = "flex-1 py-2 rounded-xl bg-gray-100 text-gray-800 text-xs font-semibold";
+            } else {
+                btnRoam.className = "flex-1 py-2 rounded-xl bg-black text-white text-xs font-semibold";
+                btnTool.className = "flex-1 py-2 rounded-xl bg-gray-100 text-gray-800 text-xs font-semibold";
+            }
+        }
+
+        // 处理点击：只切换状态，不直接改地图，交给动画循环去改高度
+        function handleFeatureClick(feature) {
+            const id = feature.id;
+            if (states[id] === undefined) return;
+
+            states[id].elevated = !states[id].elevated; // 切换动画目标
+
+            // 依然要设置原生的 elevated 状态，因为颜色切换和业务逻辑依赖它
+            map.setFeatureState({ source: 'china-source', id: id }, { elevated: states[id].elevated });
+
+            if (states[id].elevated) {
+                elevatedIds.add(id);
+                if (colorMgr) colorMgr.showCustomizer(id);
+            } else {
+                elevatedIds.delete(id);
+                if (colorMgr) colorMgr.hideCustomizer();
+            }
+        }
+
+        function handleRightClick(feature) {
+            colorMgr.setContext('feature', feature.id);
+            colorMgr.showFeatureCustomizer(feature, elevatedIds);
+        }
+
+        function clearSelection() {
+            if (currentGeoData) {
+                currentGeoData.features.forEach(f => {
+                    // 【新增】：重置动画目标
+                    if (states[f.id]) states[f.id].elevated = false;
+
+                    map.setFeatureState({ source: 'china-source', id: f.id }, {
+                        elevated: false,
+                        customColor: null
+                    });
+                });
+            }
+            elevatedIds.clear();
+            hideCustomizer();
+        }
+
+        // 动画驱动引擎：每帧更新所有板块的高度
+        function startAnimationLoop() {
+            function frame() {
+                if (currentGeoData) {
+                    currentGeoData.features.forEach(f => {
+                        const s = states[f.id];
+                        if (!s) return;
+                        const targetH = s.elevated ? TARGET_H : BASE_H;
+                        const targetB = s.elevated ? TARGET_LOW : BASE_LOW;
+
+                        // 平滑计算
+                        s.currH += (targetH - s.currH) * LERP_SPEED;
+                        s.currB += (targetB - s.currB) * LERP_SPEED;
+
+                        // 实时喂给地图
+                        map.setFeatureState({ source: 'china-source', id: f.id }, { h: s.currH, b: s.currB });
+                    });
+                }
+                requestAnimationFrame(frame);
+            }
+            requestAnimationFrame(frame);
+        }
+
+        function goBack() {
+            if (historyStack.length > 0) {
+                const prev = historyStack.pop();
+                updateMapLevel(prev.adcode, prev.name, true);
+            }
+        }
+
+        function setBackgroundMode(mode) { colorMgr.setBackgroundMode(mode); }
+
+        function updateBgColor(color) { colorMgr.updateBgColor(color); }
+
+        function updateFeatureColor(color) { colorMgr.updateFeatureColor(color); }
+
+        function hideCustomizer() { colorMgr.hideCustomizer(); }
+
+        function resetView() { map.flyTo({ ...INITIAL_VIEW, padding: PANEL_PADDING, duration: 1500 }); }
+
+        function zoomToSelection() {
+            if (elevatedIds.size === 0) return;
+            const bounds = new maplibregl.LngLatBounds();
+            currentGeoData.features.forEach(f => {
+                if (elevatedIds.has(f.id)) {
+                    const proc = (c) => { if (typeof c[0] === 'number') bounds.extend(c); else c.forEach(proc); };
+                    proc(f.geometry.coordinates);
+                }
+            });
+            map.fitBounds(bounds, {
+                padding: PANEL_PADDING, duration: 1200, pitch: 45, maxZoom: 7, essential: true
+            });
+        }
+    </script>
+    <script src="drawing-tools.js"></script>
+    <script src="color-manager.js"></script>
+</body>
+
+</html>
