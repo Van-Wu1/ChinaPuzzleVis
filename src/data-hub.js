@@ -29,10 +29,10 @@ class DataHub {
                 
                 <div class="dh-tabs" style="flex-shrink: 0;">
                     <div class="dh-tab-btn active" id="tab-btn-table" onclick="hub.switchTab('table')">
-                        <span class="mr-1.5">📋</span>属性表
+                        <span class="mr-1.5"></span>属性表
                     </div>
                     <div class="dh-tab-btn" id="tab-btn-symbology" onclick="hub.switchTab('symbology')">
-                        <span class="mr-1.5">🎨</span>符号系统
+                        <span class="mr-1.5"></span>符号系统
                     </div>
                     <div style="flex:1"></div>
                     <button onclick="hub.reset()" class="text-[11px] font-bold text-gray-400 hover:text-red-500 transition-colors mr-5 tracking-wider uppercase">重置数据</button>
