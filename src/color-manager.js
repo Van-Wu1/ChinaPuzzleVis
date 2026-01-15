@@ -40,7 +40,10 @@ class ColorManager {
 
     setContext(context, id = null) {
         this.activeContext = context;
-        if (id !== null) this.currentTargetId = id;
+        // 确保 id 类型一致（转换为数字，因为 states 的 key 是数字）
+        if (id !== null) {
+            this.currentTargetId = typeof id === 'string' ? parseInt(id, 10) : id;
+        }
 
         // 切换 context 时，更新标题
         if (context !== 'tool') {
@@ -56,7 +59,47 @@ class ColorManager {
         if (!color) return;
 
         if (this.activeContext === 'feature' && this.currentTargetId !== null) {
-            this.map.setFeatureState({ source: 'china-source', id: this.currentTargetId }, { customColor: color });
+            // 确保 id 类型一致（转换为数字，因为 states 的 key 是数字）
+            const featureId = typeof this.currentTargetId === 'string' ? parseInt(this.currentTargetId, 10) : this.currentTargetId;
+            
+            // 【核心修复】：必须同步更新全局 states 数组
+            // 只有这样，v10ing.html 里的 startAnimationLoop 才能拿到新颜色并保持它
+            if (!window.states) {
+                console.error(`[ColorManager] 错误：window.states 未定义，请确保地图已加载`);
+                return;
+            }
+            
+            if (window.states[featureId]) {
+                window.states[featureId].customColor = color;
+                console.log(`[ColorManager] 已同步 states[${featureId}].customColor = ${color}`);
+                console.log(`[ColorManager] 当前 states[${featureId}] 完整状态:`, window.states[featureId]);
+            } else {
+                // 更详细的调试信息
+                const allKeys = Object.keys(window.states);
+                const numericKeys = Object.keys(window.states).map(k => parseInt(k, 10)).filter(k => !isNaN(k));
+                console.error(`[ColorManager] 错误：无法找到 states[${featureId}]`);
+                console.error(`[ColorManager] 调试信息：`);
+                console.error(`  - currentTargetId=${this.currentTargetId} (类型: ${typeof this.currentTargetId})`);
+                console.error(`  - featureId=${featureId} (类型: ${typeof featureId})`);
+                console.error(`  - states 对象存在: ${!!window.states}`);
+                console.error(`  - states 总数量: ${allKeys.length}`);
+                console.error(`  - states 前10个key:`, allKeys.slice(0, 10));
+                console.error(`  - states 前10个数字key:`, numericKeys.slice(0, 10));
+                console.error(`  - 是否包含目标ID: ${featureId in window.states}`);
+                return;
+            }
+
+            // 更新地图状态 - 同时设置 elevated 状态，确保颜色能正确显示
+            const currentState = window.states[featureId];
+            this.map.setFeatureState(
+                { source: 'china-source', id: featureId },
+                { 
+                    customColor: color,
+                    elevated: currentState.elevated !== false // 保持当前的 elevated 状态
+                }
+            );
+            console.log(`[ColorManager] 已更新 feature-state，customColor=${color}, elevated=${currentState.elevated}`);
+
         } else if (this.activeContext === 'background') {
             document.body.style.background = color;
             if (this.map.getLayer('background-layer')) {

@@ -1,0 +1,153 @@
+/* 底部抽屉主容器 - 引入 Apple 风格毛玻璃 */
+#data-hub-panel {
+    position: fixed;
+    bottom: -450px;
+
+    /* --- 关键修改点 --- */
+    left: 320px;
+    /* 原来是 20px，现在改为 320px 以避开左侧 280px 的面板 */
+    right: 20px;
+    /* 保持右侧间距 */
+    /* ---------------- */
+
+    -webkit-font-smoothing: antialiased;
+    transform: translateZ(0);
+
+    height: 400px;
+    background: rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(25px) saturate(180%);
+    -webkit-backdrop-filter: blur(25px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 32px;
+    /* 改为全圆角，看起来更像一个悬浮的卡片 */
+    z-index: 2000;
+    transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12);
+    /* 稍微加强阴影 */
+}
+
+#data-hub-panel.open {
+    /* 向上弹出时，离底部留一点距离 (20px)，这样四面都不贴边，高级感最强 */
+    transform: translateY(-470px);
+}
+
+/* Tab 切换栏 - 胶囊风格 */
+.dh-tabs {
+    display: flex;
+    padding: 16px 24px;
+    align-items: center;
+    gap: 8px;
+}
+
+.dh-tab-btn {
+    font-size: 13px;
+    font-weight: 600;
+    color: #86868b;
+    cursor: pointer;
+    padding: 8px 16px;
+    border-radius: 12px;
+    transition: all 0.2s;
+}
+
+.dh-tab-btn:hover {
+    background: rgba(0, 0, 0, 0.04);
+}
+
+.dh-tab-btn.active {
+    color: #0071e3;
+    background: rgba(0, 113, 227, 0.1);
+}
+
+#dh-content-area {
+    display: block;
+    height: 100%;
+    overflow: hidden;
+    /* 防止内容直接溢出 */
+}
+
+.dh-table-container {
+    overflow: auto;
+    position: relative;
+    border-radius: 12px;
+}
+
+/* 强制表格行背景，防止内容“穿出”表头时透明可见 */
+.dh-table tbody tr {
+    background-color: white;
+}
+
+#data-hub-panel {
+    backface-visibility: hidden;
+    transform: translateZ(0);
+    -webkit-font-smoothing: subpixel-antialiased;
+}
+
+/* 属性表格样式 - 去掉生硬的边框 */
+.dh-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 12px;
+}
+
+.dh-table th {
+    position: sticky;
+    top: 0;
+    background: rgba(255, 255, 255, 0.9);
+    /* 略微不透明，防止文字重叠 */
+    backdrop-filter: blur(10px);
+    z-index: 20;
+    padding: 12px;
+    text-align: left;
+    font-size: 14px;
+    color: #86868b;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.dh-table td {
+    padding: 12px;
+    white-space: nowrap;
+    /* 不换行 */
+    overflow: hidden;
+    /* 溢出隐藏 */
+    text-overflow: ellipsis;
+    /* 显示省略号 */
+    max-width: 150px;
+    /* 限制最大宽度 */
+}
+
+.dh-table tr:hover td {
+    background: rgba(0, 0, 0, 0.02);
+}
+
+/* 符号系统配置区域 */
+.symbology-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+    padding: 10px;
+}
+
+.dh-content {
+    padding: 0 20px 20px 20px;
+}
+
+/* 滚动条美化 - 让它消失或变得极细 */
+#dh-content-area::-webkit-scrollbar {
+    width: 6px;
+}
+
+#dh-content-area::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#dh-content-area::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 10px;
+}
+
+#dh-content-area::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.2);
+}

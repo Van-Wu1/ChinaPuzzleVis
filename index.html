@@ -1,14 +1,18 @@
+<!-- version 10 -->
+
 <!DOCTYPE html>
 <html lang="zh-CN">
 
 <head>
     <meta charset="UTF-8">
-    <title>拼图中国v9
+    <title>拼图中国_v10
     </title>
     <script src="https://unpkg.com/maplibre-gl@3.x/dist/maplibre-gl.js"></script>
     <link href="https://unpkg.com/maplibre-gl@3.x/dist/maplibre-gl.css" rel="stylesheet" />
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.19.3/package/dist/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="src/data-hub.css">
     <style>
         body {
             margin: 0;
@@ -420,6 +424,30 @@
                 class="flex items-center justify-center gap-2 w-full py-1.5 text-[11px] text-gray-500 hover:text-gray-800 transition-colors mt-1">
                 - - - - - - - - - - - - - - - - - - - - - - -
             </button>
+            <input type="file" id="dh-input" class="hidden" accept=".csv, .xlsx"
+                onchange="hub.handleUpload(this.files[0])">
+
+            <div class="mb-2">
+                <button onclick="document.getElementById('dh-input').click()"
+                    class="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-emerald-200/50 group">
+                    <!-- <span class="text-lg group-hover:rotate-12 transition-transform">📊</span> -->
+                    <span class="font-semibold text-[11px]">导入 Excel 数据分析</span>
+                </button>
+            </div>
+            <div id="manage-data-box" class="mt-2 hidden">
+                <button onclick="hub.open()"
+                    class="w-full py-2 px-4 bg-white/60 hover:bg-white/90 text-gray-600 rounded-xl flex items-center justify-center gap-2 border border-gray-200 transition-all active:scale-95 shadow-sm group">
+
+                    <span class="relative flex h-2 w-2">
+                        <span
+                            class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+
+                    <span class="font-medium text-[11px]">查看/配置分析数据</span>
+                </button>
+            </div>
+
             <button onclick="exportMap()"
                 class="btn-apple text-[11px] bg-emerald-600 hover:bg-emerald-700 flex items-center justify-center gap-2">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -437,13 +465,18 @@
 
     <div id="map"></div>
     <div id="tooltip" class="map-tooltip"></div>
+    <div id="data-hub-root"></div>
 
     <script>
         const PANEL_PADDING = { top: 40, bottom: 40, left: 180, right: 40 };
         const INITIAL_VIEW = { center: [98, 35], zoom: 3.7, pitch: 45, bearing: 0 };
 
+        // 全局模式开关：false = 漫游模式 (默认); true = 数据模式 (DataHub)
+        window.isDataMode = false;
+
         // 动画
         let states = {}; // 存储每个地块的实时高度和底座高度
+        window.states = states; // 暴露到全局，供 ColorManager 等模块访问
 
         const BASE_H = 70000;      // 默认顶部高度
         const BASE_LOW = 0;        // 默认底部位置
@@ -494,6 +527,9 @@
             // 增加点击容差，减少误判
             clickTolerance: 10
         });
+        
+        // 暴露 map 到全局，供 DataHub 等模块访问
+        window.map = map;
 
         map.on('load', () => {
             updateMapLevel('100000', '中国', true);
@@ -506,6 +542,8 @@
             map.on('mousedown', (e) => {
                 isMouseDown = true;
                 startPos = { x: e.point.x, y: e.point.y };
+
+
             });
 
             map.on('mouseup', (e) => {
@@ -533,8 +571,15 @@
                     if (features.length > 0) {
                         const feature = features[0];
                         if (e.originalEvent.button === 0) {
+                            // 【关键拦截点】
+                            if (window.isDataMode) {
+                                console.log("当前处于数据模式，禁止手动点击升降");
+                                // 此时点击左键不执行任何操作，直接返回
+                                return;
+                            }
                             handleFeatureClick(feature);
                         } else if (e.originalEvent.button === 2) {
+                            // 右键不受影响，依然可以修改颜色
                             handleRightClick(feature);
                         }
                     }
@@ -575,8 +620,29 @@
                 tooltip.style.display = 'none';
             });
 
+            window.hub = new DataHub();
+            hub.init();
+
             // 别忘了启动它
             startAnimationLoop();
+
+            // 捉虫断点
+            // 每3秒打印一次状态监控，看看颜色权在谁手里
+            setInterval(() => {
+                console.log("--- 状态监控 ---");
+                console.log("当前模式: ", window.isDataMode ? "数据模式 (DataHub)" : "漫游模式 (Roam)");
+
+                // 随机抽查一个省份看看状态（比如浙江省 id: 330000）
+                const sampleId = '330000';
+                if (states[sampleId]) {
+                    console.log(`抽查[${sampleId}]状态: `, {
+                        elevated: states[sampleId].elevated,
+                        targetH: states[sampleId].targetH,
+                        dataColor: states[sampleId].dataColor,
+                        customColor: states[sampleId].customColor
+                    });
+                }
+            }, 3000);
         });
 
 
@@ -753,15 +819,39 @@
 
             data.features.forEach((f, index) => {
                 f.id = index; // 【关键：必须给 feature 对象本身赋值 id】
-                states[index] = { currH: BASE_H, currB: BASE_LOW, elevated: false };
+                states[f.id] = {
+                    currH: BASE_H,
+                    currB: BASE_LOW,
+                    elevated: false,
+                    customColor: null,
+                    dataColor: null, // 必须初始化
+                    targetH: null    // 必须初始化
+                };
             });
+
+            // 确保 window.states 始终指向最新的 states 对象
+            window.states = states;
 
             currentGeoData = data;
             currentAdcode = adcode;
             document.getElementById('current-name').innerText = name || '中国';
 
+            // ... 在 updateMapLevel 函数内部
             if (map.getSource('china-source')) {
                 map.getSource('china-source').setData(data);
+
+                // 【关键新增】：每次切换层级，强制刷新一次颜色表达式，确保变量通道打开
+                map.setPaintProperty('china-3d', 'fill-extrusion-color', [
+                    'case',
+                    ['boolean', ['feature-state', 'elevated'], false],
+                    [
+                        'coalesce',
+                        ['feature-state', 'customColor'], // 1. 优先读取手动选的颜色
+                        ['feature-state', 'dataColor'],   // 2. 其次读取 DataHub 的颜色
+                        '#0071e3'                         // 3. 最后才是默认蓝
+                    ],
+                    '#f9f9fb' // 未升起时显示浅灰色
+                ]);
             } else {
                 map.addSource('china-source', { type: 'geojson', data: data });
                 map.addLayer({
@@ -773,22 +863,36 @@
                         'fill-extrusion-base': ['feature-state', 'b'],
                         'fill-extrusion-color': [
                             'case',
+                            // 只要板块是升起的（手动点击或数据驱动）
                             ['boolean', ['feature-state', 'elevated'], false],
-                            ['coalesce', ['feature-state', 'customColor'], '#0071e3'],
-                            '#f9f9fb'
+                            [
+                                'coalesce',
+                                ['feature-state', 'customColor'], // 1. 优先拿你刚才在 color-manager 里改的色
+                                ['feature-state', 'dataColor'],   // 2. 其次拿 DataHub 导入的 Excel 色
+                                '#0071e3'                         // 3. 最后保底蓝色
+                            ],
+                            '#f9f9fb' // 降下时显示浅灰色
                         ],
                         'fill-extrusion-opacity': 1.0
                     }
                 });
+
 
                 // map.addLayer({ id: 'line-bold', type: 'line', source: 'china-source', paint: { 'line-color': '#d2d2d7', 'line-width': 0.8, 'line-opacity': 0.2 } });
                 // map.addLayer({ id: 'line-medium', type: 'line', source: 'china-source', paint: { 'line-color': '#d2d2d7', 'line-width': 0.6, 'line-opacity': 0.2 } });
                 // map.addLayer({ id: 'line-thin', type: 'line', source: 'china-source', paint: { 'line-color': '#d2d2d7', 'line-width': 0.4, 'line-opacity': 0.2 } });
             }
 
-            map.setPaintProperty('line-bold', 'line-opacity', 0.8);
-            map.setPaintProperty('line-medium', 'line-opacity', (currentLevel === 'city' || currentLevel === 'district') ? 0.5 : 0);
-            map.setPaintProperty('line-thin', 'line-opacity', (currentLevel === 'district') ? 0.3 : 0);
+            // 只有当图层存在时才设置样式，避免报错
+            if (map.getLayer('line-bold')) {
+                map.setPaintProperty('line-bold', 'line-opacity', 0.8);
+            }
+            if (map.getLayer('line-medium')) {
+                map.setPaintProperty('line-medium', 'line-opacity', (currentLevel === 'city' || currentLevel === 'district') ? 0.5 : 0);
+            }
+            if (map.getLayer('line-thin')) {
+                map.setPaintProperty('line-thin', 'line-opacity', (currentLevel === 'district') ? 0.3 : 0);
+            }
 
             clearSelection();
         }
@@ -816,66 +920,145 @@
 
         // 处理点击：只切换状态，不直接改地图，交给动画循环去改高度
         function handleFeatureClick(feature) {
-            const id = feature.id;
-            if (states[id] === undefined) return;
+            // 如果是数据模式，完全禁止点击
+            if (window.isDataMode) return;
 
-            states[id].elevated = !states[id].elevated; // 切换动画目标
+            // 确保 id 类型一致（转换为数字，因为 states 的 key 是数字）
+            const featureId = typeof feature.id === 'string' ? parseInt(feature.id, 10) : feature.id;
+            const s = states[featureId];
+            if (!s) return;
 
-            // 依然要设置原生的 elevated 状态，因为颜色切换和业务逻辑依赖它
-            map.setFeatureState({ source: 'china-source', id: id }, { elevated: states[id].elevated });
+            // 切换升降状态
+            s.elevated = !s.elevated;
 
-            if (states[id].elevated) {
-                elevatedIds.add(id);
-                if (colorMgr) colorMgr.showCustomizer(id);
+            // 同步更新 elevatedIds，确保 zoomToSelection 能正确工作
+            if (s.elevated) {
+                elevatedIds.add(featureId);
             } else {
-                elevatedIds.delete(id);
-                if (colorMgr) colorMgr.hideCustomizer();
+                elevatedIds.delete(featureId);
             }
+
+            // 左键点击不调用色盘，只有右键在升起状态下才调用色盘
+
+            console.log(`[点击监控] 区域: ${feature.properties.name}, 状态: ${s.elevated ? '升起' : '降落'}`);
         }
 
         function handleRightClick(feature) {
-            colorMgr.setContext('feature', feature.id);
-            colorMgr.showFeatureCustomizer(feature, elevatedIds);
+            // 确保 id 类型一致（转换为数字，因为 states 的 key 是数字）
+            const featureId = typeof feature.id === 'string' ? parseInt(feature.id, 10) : feature.id;
+            const s = states[featureId];
+            if (!s) {
+                console.warn("右键点击区域:", feature.properties.name, "ID:", featureId, "（无法找到对应状态）");
+                return;
+            }
+            
+            // 只有在升起状态下才调用色盘
+            if (!s.elevated) {
+                console.log("右键点击区域:", feature.properties.name, "（未升起，不显示色盘）");
+                return; // 如果未升起，直接返回，不调用色盘
+            }
+            
+            if (window.colorMgr) {
+                window.colorMgr.setContext('feature', featureId);
+            }
+            console.log("右键点击区域:", feature.properties.name, "ID:", featureId, "（已升起，显示色盘）");
         }
 
+        // 【修复版】clearSelection
         function clearSelection() {
             if (currentGeoData) {
                 currentGeoData.features.forEach(f => {
-                    // 【新增】：重置动画目标
-                    if (states[f.id]) states[f.id].elevated = false;
+                    // 获取当前状态对象
+                    const s = states[f.id];
+                    if (!s) return; // 安全检查
 
-                    map.setFeatureState({ source: 'china-source', id: f.id }, {
-                        elevated: false,
-                        customColor: null
-                    });
+                    // 重置状态
+                    s.elevated = false;
+                    // 如果是 DataHub 模式，还要重置 targetH，否则高度降不下来
+                    if (typeof s.targetH !== 'undefined') s.targetH = null;
+                    // 清空颜色
+                    s.customColor = null;
+
+                    // 立即更新地图状态，防止闪烁
+                    map.setFeatureState(
+                        { source: 'china-source', id: f.id },
+                        {
+                            h: s.currH,
+                            b: s.currB,
+                            elevated: false, // 强制设为 false
+                            customColor: null
+                        }
+                    );
                 });
             }
             elevatedIds.clear();
             hideCustomizer();
+            // 如果 DataHub 存在，也要重置它的 UI 状态
+            if (window.hub) {
+                // 可选：这里可以不强制重置 DataHub 的数据，看你需求
+                // hub.close(); 
+            }
         }
 
         // 动画驱动引擎：每帧更新所有板块的高度
         function startAnimationLoop() {
+            let frameCount = 0;
+
             function frame() {
+                frameCount++;
                 if (currentGeoData) {
                     currentGeoData.features.forEach(f => {
                         const s = states[f.id];
                         if (!s) return;
-                        const targetH = s.elevated ? TARGET_H : BASE_H;
-                        const targetB = s.elevated ? TARGET_LOW : BASE_LOW;
 
-                        // 平滑计算
+                        // --- 1. 优先级绝对判定 ---
+                        // 强制检查 customColor 是否真的存在（使用更严格的检查，避免空字符串等问题）
+                        let targetColor = null;
+                        if (s.customColor && typeof s.customColor === 'string' && s.customColor.trim() !== '') {
+                            targetColor = s.customColor;
+                        } else if (window.isDataMode && s.dataColor && typeof s.dataColor === 'string' && s.dataColor.trim() !== '') {
+                            targetColor = s.dataColor;
+                        }
+
+                        // --- 2. 暴力诊断：每 100 帧打印一次有颜色的块 ---
+                        if (frameCount % 100 === 0 && targetColor) {
+                            console.log(`[渲染诊断] 区域:${f.properties.name} | 模式:${window.isDataMode ? '数据' : '漫游'} | 颜色值:${targetColor}`);
+                        }
+
+                        // --- 3. 高度与动画 ---
+                        const targetH = window.isDataMode ? (s.targetH || BASE_H) : (s.elevated ? TARGET_H : BASE_H);
+                        const targetB = (targetH > BASE_H) ? TARGET_LOW : BASE_LOW;
                         s.currH += (targetH - s.currH) * LERP_SPEED;
                         s.currB += (targetB - s.currB) * LERP_SPEED;
 
-                        // 实时喂给地图
-                        map.setFeatureState({ source: 'china-source', id: f.id }, { h: s.currH, b: s.currB });
+                        // --- 4. 提交给 Shader ---
+                        // 构建状态对象，只在有颜色时才设置 customColor，避免覆盖已设置的颜色
+                        const featureState = {
+                            h: s.currH,
+                            b: s.currB,
+                            elevated: (targetH > BASE_H)
+                        };
+                        // 只有当 targetColor 不为 null 时才设置，避免清除已设置的颜色
+                        if (targetColor !== null) {
+                            featureState.customColor = targetColor;
+                        }
+                        // 如果处于数据模式且有 dataColor，也要设置
+                        if (window.isDataMode && s.dataColor !== null && s.dataColor !== undefined) {
+                            featureState.dataColor = s.dataColor;
+                        }
+                        map.setFeatureState(
+                            { source: 'china-source', id: f.id },
+                            featureState
+                        );
                     });
                 }
                 requestAnimationFrame(frame);
             }
             requestAnimationFrame(frame);
         }
+
+
+
 
         function goBack() {
             if (historyStack.length > 0) {
@@ -895,21 +1078,59 @@
         function resetView() { map.flyTo({ ...INITIAL_VIEW, padding: PANEL_PADDING, duration: 1500 }); }
 
         function zoomToSelection() {
-            if (elevatedIds.size === 0) return;
+            if (!currentGeoData || !currentGeoData.features) {
+                console.warn('[zoomToSelection] 当前没有地图数据');
+                return;
+            }
+
             const bounds = new maplibregl.LngLatBounds();
+            let hasElevatedFeatures = false;
+
+            // 检查所有升起的板块（包括手动点击和数据驱动的）
             currentGeoData.features.forEach(f => {
-                if (elevatedIds.has(f.id)) {
-                    const proc = (c) => { if (typeof c[0] === 'number') bounds.extend(c); else c.forEach(proc); };
+                const featureId = typeof f.id === 'string' ? parseInt(f.id, 10) : f.id;
+                const s = states[featureId];
+                
+                // 检查是否升起：手动点击的（elevated=true）或数据驱动的（在 elevatedIds 中）
+                const isElevated = (s && s.elevated) || elevatedIds.has(featureId);
+                
+                if (isElevated) {
+                    hasElevatedFeatures = true;
+                    // 递归处理坐标，构建边界框
+                    const proc = (c) => { 
+                        if (typeof c[0] === 'number') {
+                            bounds.extend(c);
+                        } else {
+                            c.forEach(proc);
+                        }
+                    };
                     proc(f.geometry.coordinates);
                 }
             });
+
+            if (!hasElevatedFeatures) {
+                console.warn('[zoomToSelection] 没有找到升起的板块');
+                return;
+            }
+
+            // 如果边界框有效，执行聚焦动画
+            if (bounds.isEmpty()) {
+                console.warn('[zoomToSelection] 边界框为空');
+                return;
+            }
+
             map.fitBounds(bounds, {
-                padding: PANEL_PADDING, duration: 1200, pitch: 45, maxZoom: 7, essential: true
+                padding: PANEL_PADDING, 
+                duration: 1200, 
+                pitch: 45, 
+                maxZoom: 7, 
+                essential: true
             });
         }
     </script>
-    <script src="drawing-tools.js"></script>
-    <script src="color-manager.js"></script>
+    <script src="./src/drawing-tools.js"></script>
+    <script src="./src/color-manager.js"></script>
+    <script src="./src/data-hub.js"></script>
 </body>
 
 </html>
