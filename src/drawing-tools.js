@@ -175,6 +175,13 @@ class DrawingTools {
                     const tailWidth = obj.tailWidth || width;
                     const midWidth = obj.midWidth || (width * 0.3);
                     
+                    // 提前计算头部参数，供尾部逻辑使用
+                    const headAng = Math.atan2(headEnd[1] - headStart[1], headEnd[0] - headStart[0]);
+                    const m = this.getMetrics(p1, realP2);
+                    const headHeightScale = obj.headHeightScale ?? 1.0;
+                    const headBaseScale = obj.headBaseScale ?? 1.0;
+                    const hWidth = 1.2 * headBaseScale;
+                    
                     // 准备所有点的信息（位置、宽度、切线角度）
                     const shaftPointData = [];
                     for (let i = 0; i < shaftPts.length; i++) {
@@ -195,6 +202,13 @@ class DrawingTools {
                         });
                     }
                     
+                    // 计算最后一个梯形的左上角和右上角（用于延长方向计算）
+                    // 最后一个梯形是靠近尾部那侧的间隔一个宽度的梯形，也就是第二个段（i === 1）的 p1 点
+                    // 尾部第一段是 i === 0，所以第二个段是 shaftPointData[1]
+                    const secondSegmentP1 = shaftPointData[1]; // 第二个段的 p1（靠近尾部那侧间隔一个宽度）
+                    const lastTrapezoidTopLeft = this.getPt(secondSegmentP1.point, secondSegmentP1.angle + Math.PI / 2, secondSegmentP1.width / 2);
+                    const lastTrapezoidTopRight = this.getPt(secondSegmentP1.point, secondSegmentP1.angle - Math.PI / 2, secondSegmentP1.width / 2);
+                    
                     // 将箭杆分成多个小段，每段有不同的透明度
                     for (let i = 0; i < shaftPointData.length - 1; i++) {
                         const p1_seg = shaftPointData[i];
@@ -206,6 +220,57 @@ class DrawingTools {
                         const alpha = 0.25 + (1.0 - 0.25) * t_mid; // t=1时alpha=1.0（头部实心），t=0时alpha=0.25（尾部半透明）
                         // 如果alpha接近1.0，直接使用原始颜色避免颜色转换误差
                         const segmentColor = alpha >= 0.99 ? color : this.hexToRgba(color, alpha);
+                        
+                        // 如果是尾部第一段（i === 0），添加尾部延长效果
+                        if (i === 0) {
+                            // 获取尾部第一段的左右点（对应 topLeft 和 topRight）
+                            const tailLeft = this.getPt(p1_seg.point, p1_seg.angle + Math.PI / 2, p1_seg.width / 2);  // 尾部左侧（topLeft）
+                            const tailRight = this.getPt(p1_seg.point, p1_seg.angle - Math.PI / 2, p1_seg.width / 2); // 尾部右侧（topRight）
+                            
+                            // 计算尾部中点
+                            const tailMidPoint = {
+                                lng: (tailLeft[0] + tailRight[0]) / 2,
+                                lat: (tailLeft[1] + tailRight[1]) / 2
+                            };
+                            
+                            // 获取尾巴长度参数（默认值为 tailWidth 的 0.5 倍）
+                            const tailLength = (obj.tailLength || 0.5) * tailWidth;
+                            
+                            // 计算从最后一个梯形左上角到尾部左侧的方向，向外延长
+                            const leftDir = Math.atan2(tailLeft[1] - lastTrapezoidTopLeft[1], tailLeft[0] - lastTrapezoidTopLeft[0]);
+                            const extendedLeft = [
+                                tailLeft[0] + Math.cos(leftDir) * tailLength,
+                                tailLeft[1] + Math.sin(leftDir) * tailLength
+                            ];
+                            
+                            // 计算从最后一个梯形右上角到尾部右侧的方向，向外延长
+                            const rightDir = Math.atan2(tailRight[1] - lastTrapezoidTopRight[1], tailRight[0] - lastTrapezoidTopRight[0]);
+                            const extendedRight = [
+                                tailRight[0] + Math.cos(rightDir) * tailLength,
+                                tailRight[1] + Math.sin(rightDir) * tailLength
+                            ];
+                            
+                            // 构建两个三角形：左三角形和右三角形
+                            // 左三角形：尾部左侧 -> 延长左侧点 -> 尾部中点 -> 尾部左侧
+                            features.push({
+                                type: 'Feature',
+                                properties: { id, color: segmentColor },
+                                geometry: {
+                                    type: 'Polygon',
+                                    coordinates: [[tailLeft, extendedLeft, [tailMidPoint.lng, tailMidPoint.lat], tailLeft]]
+                                }
+                            });
+                            
+                            // 右三角形：尾部右侧 -> 延长右侧点 -> 尾部中点 -> 尾部右侧
+                            features.push({
+                                type: 'Feature',
+                                properties: { id, color: segmentColor },
+                                geometry: {
+                                    type: 'Polygon',
+                                    coordinates: [[tailRight, extendedRight, [tailMidPoint.lng, tailMidPoint.lat], tailRight]]
+                                }
+                            });
+                        }
                         
                         // 构建该段的四边形
                         const segCoords = [
@@ -224,12 +289,8 @@ class DrawingTools {
                     }
 
                     // 头部：用最后一段方向生成三角形（底边/高度分别可控）
-                    const headAng = Math.atan2(headEnd[1] - headStart[1], headEnd[0] - headStart[0]);
-                    const m = this.getMetrics(p1, realP2);
-                    const headHeightScale = obj.headHeightScale ?? 1.0;
-                    const headBaseScale = obj.headBaseScale ?? 1.0;
+                    // headAng 和 hWidth 已在上面计算
                     const hLen = Math.min(1.5, m.dist * 0.3) * headHeightScale;
-                    const hWidth = 1.2 * headBaseScale;
 
                     const tip = [headEnd[0] + Math.cos(headAng) * hLen, headEnd[1] + Math.sin(headAng) * hLen];
                     const baseLeft = this.getPt({ lng: headStart[0], lat: headStart[1] }, headAng + Math.PI / 2, hWidth / 2);
@@ -275,6 +336,13 @@ class DrawingTools {
                         });
                     }
                     
+                    // 计算最后一个梯形的左上角和右上角（用于延长方向计算）
+                    // 最后一个梯形是靠近尾部那侧的间隔一个宽度的梯形，也就是第二个段（i === 1）的 p1 点
+                    // 尾部第一段是 i === 0，所以第二个段是 shaftPoints[1]
+                    const secondSegmentP1 = shaftPoints[1]; // 第二个段的 p1（靠近尾部那侧间隔一个宽度）
+                    const lastTrapezoidTopLeft = this.getPt(secondSegmentP1.point, angle + Math.PI / 2, secondSegmentP1.width / 2);
+                    const lastTrapezoidTopRight = this.getPt(secondSegmentP1.point, angle - Math.PI / 2, secondSegmentP1.width / 2);
+                    
                     // 将箭杆分成多个小段，每段有不同的透明度（从头部实心到尾部半透明）
                     for (let i = 0; i < shaftSegments; i++) {
                         const p1_seg = shaftPoints[i];
@@ -286,6 +354,57 @@ class DrawingTools {
                         const alpha = 0.25 + (1.0 - 0.25) * t_mid; // t=1时alpha=1.0（头部实心），t=0时alpha=0.25（尾部半透明）
                         // 如果alpha接近1.0，直接使用原始颜色避免颜色转换误差
                         const segmentColor = alpha >= 0.99 ? color : this.hexToRgba(color, alpha);
+                        
+                        // 如果是尾部第一段（i === 0），添加尾部延长效果
+                        if (i === 0) {
+                            // 获取尾部第一段的左右点（对应 topLeft 和 topRight）
+                            const tailLeft = this.getPt(p1_seg.point, angle + Math.PI / 2, p1_seg.width / 2);  // 尾部左侧（topLeft）
+                            const tailRight = this.getPt(p1_seg.point, angle - Math.PI / 2, p1_seg.width / 2); // 尾部右侧（topRight）
+                            
+                            // 计算尾部中点
+                            const tailMidPoint = {
+                                lng: (tailLeft[0] + tailRight[0]) / 2,
+                                lat: (tailLeft[1] + tailRight[1]) / 2
+                            };
+                            
+                            // 获取尾巴长度参数（默认值为 tailWidth 的 0.5 倍）
+                            const tailLength = (obj.tailLength || 0.5) * tailWidth;
+                            
+                            // 计算从最后一个梯形左上角到尾部左侧的方向，向外延长
+                            const leftDir = Math.atan2(tailLeft[1] - lastTrapezoidTopLeft[1], tailLeft[0] - lastTrapezoidTopLeft[0]);
+                            const extendedLeft = [
+                                tailLeft[0] + Math.cos(leftDir) * tailLength,
+                                tailLeft[1] + Math.sin(leftDir) * tailLength
+                            ];
+                            
+                            // 计算从最后一个梯形右上角到尾部右侧的方向，向外延长
+                            const rightDir = Math.atan2(tailRight[1] - lastTrapezoidTopRight[1], tailRight[0] - lastTrapezoidTopRight[0]);
+                            const extendedRight = [
+                                tailRight[0] + Math.cos(rightDir) * tailLength,
+                                tailRight[1] + Math.sin(rightDir) * tailLength
+                            ];
+                            
+                            // 构建两个三角形：左三角形和右三角形
+                            // 左三角形：尾部左侧 -> 延长左侧点 -> 尾部中点 -> 尾部左侧
+                            features.push({
+                                type: 'Feature',
+                                properties: { id, color: segmentColor },
+                                geometry: {
+                                    type: 'Polygon',
+                                    coordinates: [[tailLeft, extendedLeft, [tailMidPoint.lng, tailMidPoint.lat], tailLeft]]
+                                }
+                            });
+                            
+                            // 右三角形：尾部右侧 -> 延长右侧点 -> 尾部中点 -> 尾部右侧
+                            features.push({
+                                type: 'Feature',
+                                properties: { id, color: segmentColor },
+                                geometry: {
+                                    type: 'Polygon',
+                                    coordinates: [[tailRight, extendedRight, [tailMidPoint.lng, tailMidPoint.lat], tailRight]]
+                                }
+                            });
+                        }
                         
                         // 构建该段的四边形
                         const segCoords = [
@@ -585,9 +704,13 @@ class DrawingTools {
                         <label><span>尾巴</span><span class="dt-chip">${(obj.tailWidth || obj.width).toFixed(1)}</span></label>
                         <input type="range" class="dt-range" min="0.1" max="2" step="0.1" value="${obj.tailWidth || obj.width}" id="dt-tail-width-input">
                     </div>
-                    <div class="dt-row" style="margin-bottom:0;">
+                    <div class="dt-row">
                         <label><span>中间</span><span class="dt-chip">${(obj.midWidth || obj.width * 0.3).toFixed(1)}</span></label>
                         <input type="range" class="dt-range" min="0.05" max="1" step="0.05" value="${obj.midWidth || obj.width * 0.3}" id="dt-mid-width-input">
+                    </div>
+                    <div class="dt-row" style="margin-bottom:0;">
+                        <label><span>尾巴长度</span><span class="dt-chip">${((obj.tailLength || 0.5) * 100).toFixed(0)}%</span></label>
+                        <input type="range" class="dt-range" min="0" max="2" step="0.1" value="${obj.tailLength || 0.5}" id="dt-tail-length-input">
                     </div>
                 </div>
             `;
@@ -685,6 +808,7 @@ class DrawingTools {
         bind('dt-curve-input', 'curveAmount');
         bind('dt-tail-width-input', 'tailWidth');
         bind('dt-mid-width-input', 'midWidth');
+        bind('dt-tail-length-input', 'tailLength');
         bind('dt-major-axis-input', 'majorAxisScale');
         bind('dt-minor-axis-input', 'minorAxisScale');
         bind('dt-rotation-input', 'rotation', true, false, (val) => val * Math.PI / 180); // 度转弧度
@@ -870,6 +994,10 @@ class DrawingTools {
                 this.selectedId = features[0].properties.id;
                 const obj = this.objects.find(o => o.id === this.selectedId);
                 if (obj) {
+                    // 如果是箭头，打印梯形的四个点坐标
+                    if (obj.type === 'arrow') {
+                        this._printArrowTrapezoidPoints(obj);
+                    }
                     this._showControlBox(obj);
                     this._renderPropsPanel(obj);
                     document.getElementById('dt-customizer').style.display = 'block';
@@ -1032,6 +1160,68 @@ class DrawingTools {
         this.selectedId = null; 
         document.getElementById('dt-customizer').style.display = 'none';
         this._hideControlBox();
+    }
+
+    // 打印箭头梯形的四个点坐标
+    _printArrowTrapezoidPoints(obj) {
+        if (obj.type !== 'arrow') return;
+        
+        const p1 = obj.p1;
+        const realP2 = obj.p2 || obj.p1;
+        const { angle, dist } = this._generator.getMetrics(p1, realP2);
+        
+        // 计算头部参数
+        const headHeightScale = obj.headHeightScale ?? 1.0;
+        const hLen = Math.min(1.5, dist * 0.3) * headHeightScale;
+        const baseCenter = {
+            lng: realP2.lng - Math.cos(angle) * hLen,
+            lat: realP2.lat - Math.sin(angle) * hLen
+        };
+        
+        // 获取宽度参数
+        const tailWidth = obj.tailWidth || obj.width || 0.4;
+        const midWidth = obj.midWidth || (obj.width * 0.3) || 0.12;
+        
+        // 计算梯形的四个点（整个箭杆的四个角点）
+        // 左上角：尾部左侧
+        const topLeft = this._generator.getPt(p1, angle + Math.PI / 2, tailWidth / 2);
+        // 右上角：尾部右侧
+        const topRight = this._generator.getPt(p1, angle - Math.PI / 2, tailWidth / 2);
+        // 右下角：头部右侧
+        const bottomRight = this._generator.getPt(baseCenter, angle - Math.PI / 2, midWidth / 2);
+        // 左下角：头部左侧
+        const bottomLeft = this._generator.getPt(baseCenter, angle + Math.PI / 2, midWidth / 2);
+        
+        // 计算最后一个梯形的左上角和右上角
+        // 最后一个梯形是靠近尾部那侧的间隔一个宽度的梯形，也就是第二个段（i === 1）的 p1 点
+        // 尾部第一段是 i === 0，所以第二个段是 t = 1 / shaftSegments
+        const shaftSegments = 30; // 与 generate() 中的值保持一致
+        const t_second = 1 / shaftSegments; // 第二个段的 t 值
+        const secondSegmentWidth = tailWidth * (1 - t_second) + midWidth * t_second;
+        const secondSegmentPoint = {
+            lng: p1.lng + (baseCenter.lng - p1.lng) * t_second,
+            lat: p1.lat + (baseCenter.lat - p1.lat) * t_second
+        };
+        // 最后一个梯形的左上角（第二个段的p1左侧）
+        const lastTrapezoidTopLeft = this._generator.getPt(secondSegmentPoint, angle + Math.PI / 2, secondSegmentWidth / 2);
+        // 最后一个梯形的右上角（第二个段的p1右侧）
+        const lastTrapezoidTopRight = this._generator.getPt(secondSegmentPoint, angle - Math.PI / 2, secondSegmentWidth / 2);
+        
+        console.log('=== 箭头梯形六个点坐标 ===');
+        console.log('尾部左侧:', topLeft);
+        console.log('尾部右侧:', topRight);
+        console.log('头部右侧:', bottomRight);
+        console.log('头部左侧:', bottomLeft);
+        console.log('最后一个梯形左上角:', lastTrapezoidTopLeft);
+        console.log('最后一个梯形右上角:', lastTrapezoidTopRight);
+        console.log('箭头参数:', {
+            p1: p1,
+            p2: realP2,
+            angle: angle * 180 / Math.PI + '度',
+            tailWidth: tailWidth,
+            midWidth: midWidth,
+            dist: dist
+        });
     }
     
     // 显示控制框和控制点（类似 PowerPoint）
