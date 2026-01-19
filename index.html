@@ -633,6 +633,31 @@
     
     <!-- 自定义提示框容器 -->
     <div id="toast-container"></div>
+    
+    <!-- 水印 -->
+    <div id="watermark" style="
+        position: fixed;
+        bottom: 8px;
+        right: 8px;
+        z-index: 1000;
+        pointer-events: none;
+        font-size: 13px;
+        color: rgba(0, 0, 0, 0.3);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        font-weight: 400;
+        letter-spacing: 0.5px;
+        user-select: none;
+        transition: opacity 0.3s ease;
+    ">
+        <a href="https://github.com/Van-Wu1/ChinaPuzzleVis" target="_blank" rel="noopener noreferrer" style="
+            color: inherit;
+            text-decoration: none;
+            pointer-events: auto;
+            opacity: 0.5;
+        " onmouseover="this.style.opacity='0.5'" onmouseout="this.style.opacity='0.5'">
+            @Van-Wu1 2026
+        </a>
+    </div>
 
     <script>
         // 自定义提示框功能
