@@ -273,7 +273,6 @@ class DataHub {
         if (window.elevatedIds) {
             window.elevatedIds.clear();
         }
-        console.log("控制权已交还给漫游模式，所有颜色已重置为默认蓝色");
     }
     
     reset() {
@@ -332,7 +331,6 @@ class DataHub {
         if (window.elevatedIds) {
             window.elevatedIds.clear();
         }
-        console.log("[DataHub] 已清除漫游模式的颜色和升降状态");
     }
 
     // 验证文件格式：检查是否包含地名列
@@ -516,15 +514,12 @@ class DataHub {
                         return;
                     }
                     
-                    console.log('[DataHub]', validation.message);
-                    
                     // 【关键】：成功导入数据后，清除漫游模式的颜色和升降状态
                     this.clearRoamModeEffects();
                     
                     this.open();
                     document.getElementById('manage-data-box').classList.remove('hidden');
                     this.switchTab('table');
-                    console.log(`[DataHub] 成功导入 ${this.data.length} 条数据`);
                 } else {
                     console.warn('[DataHub] 导入的数据为空');
                     alert('导入的文件中没有数据，请检查文件格式');

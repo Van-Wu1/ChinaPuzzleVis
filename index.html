@@ -573,7 +573,6 @@
                         if (e.originalEvent.button === 0) {
                             // 【关键拦截点】
                             if (window.isDataMode) {
-                                console.log("当前处于数据模式，禁止手动点击升降");
                                 // 此时点击左键不执行任何操作，直接返回
                                 return;
                             }
@@ -623,26 +622,8 @@
             window.hub = new DataHub();
             hub.init();
 
-            // 别忘了启动它
+            // 启动动画循环
             startAnimationLoop();
-
-            // 捉虫断点
-            // 每3秒打印一次状态监控，看看颜色权在谁手里
-            setInterval(() => {
-                console.log("--- 状态监控 ---");
-                console.log("当前模式: ", window.isDataMode ? "数据模式 (DataHub)" : "漫游模式 (Roam)");
-
-                // 随机抽查一个省份看看状态（比如浙江省 id: 330000）
-                const sampleId = '330000';
-                if (states[sampleId]) {
-                    console.log(`抽查[${sampleId}]状态: `, {
-                        elevated: states[sampleId].elevated,
-                        targetH: states[sampleId].targetH,
-                        dataColor: states[sampleId].dataColor,
-                        customColor: states[sampleId].customColor
-                    });
-                }
-            }, 3000);
         });
 
 
@@ -878,20 +859,6 @@
                 });
 
 
-                // map.addLayer({ id: 'line-bold', type: 'line', source: 'china-source', paint: { 'line-color': '#d2d2d7', 'line-width': 0.8, 'line-opacity': 0.2 } });
-                // map.addLayer({ id: 'line-medium', type: 'line', source: 'china-source', paint: { 'line-color': '#d2d2d7', 'line-width': 0.6, 'line-opacity': 0.2 } });
-                // map.addLayer({ id: 'line-thin', type: 'line', source: 'china-source', paint: { 'line-color': '#d2d2d7', 'line-width': 0.4, 'line-opacity': 0.2 } });
-            }
-
-            // 只有当图层存在时才设置样式，避免报错
-            if (map.getLayer('line-bold')) {
-                map.setPaintProperty('line-bold', 'line-opacity', 0.8);
-            }
-            if (map.getLayer('line-medium')) {
-                map.setPaintProperty('line-medium', 'line-opacity', (currentLevel === 'city' || currentLevel === 'district') ? 0.5 : 0);
-            }
-            if (map.getLayer('line-thin')) {
-                map.setPaintProperty('line-thin', 'line-opacity', (currentLevel === 'district') ? 0.3 : 0);
             }
 
             clearSelection();
@@ -940,7 +907,6 @@
 
             // 左键点击不调用色盘，只有右键在升起状态下才调用色盘
 
-            console.log(`[点击监控] 区域: ${feature.properties.name}, 状态: ${s.elevated ? '升起' : '降落'}`);
         }
 
         function handleRightClick(feature) {
@@ -954,65 +920,64 @@
             
             // 只有在升起状态下才调用色盘
             if (!s.elevated) {
-                console.log("右键点击区域:", feature.properties.name, "（未升起，不显示色盘）");
                 return; // 如果未升起，直接返回，不调用色盘
             }
             
             if (window.colorMgr) {
                 window.colorMgr.setContext('feature', featureId);
             }
-            console.log("右键点击区域:", feature.properties.name, "ID:", featureId, "（已升起，显示色盘）");
         }
 
-        // 【修复版】clearSelection
+        // 【修复版】clearSelection（性能优化：批量更新）
         function clearSelection() {
-            if (currentGeoData) {
-                currentGeoData.features.forEach(f => {
-                    // 获取当前状态对象
+            if (currentGeoData && currentGeoData.features) {
+                const updates = [];
+                for (let i = 0; i < currentGeoData.features.length; i++) {
+                    const f = currentGeoData.features[i];
                     const s = states[f.id];
-                    if (!s) return; // 安全检查
+                    if (!s) continue;
 
                     // 重置状态
                     s.elevated = false;
-                    // 如果是 DataHub 模式，还要重置 targetH，否则高度降不下来
                     if (typeof s.targetH !== 'undefined') s.targetH = null;
-                    // 清空颜色
                     s.customColor = null;
 
-                    // 立即更新地图状态，防止闪烁
-                    map.setFeatureState(
-                        { source: 'china-source', id: f.id },
-                        {
+                    updates.push({
+                        id: f.id,
+                        state: {
                             h: s.currH,
                             b: s.currB,
-                            elevated: false, // 强制设为 false
+                            elevated: false,
                             customColor: null
                         }
+                    });
+                }
+                
+                // 批量更新地图状态
+                for (let i = 0; i < updates.length; i++) {
+                    map.setFeatureState(
+                        { source: 'china-source', id: updates[i].id },
+                        updates[i].state
                     );
-                });
+                }
             }
             elevatedIds.clear();
             hideCustomizer();
-            // 如果 DataHub 存在，也要重置它的 UI 状态
-            if (window.hub) {
-                // 可选：这里可以不强制重置 DataHub 的数据，看你需求
-                // hub.close(); 
-            }
         }
 
-        // 动画驱动引擎：每帧更新所有板块的高度
+        // 动画驱动引擎：每帧更新所有板块的高度（性能优化版）
         function startAnimationLoop() {
-            let frameCount = 0;
-
             function frame() {
-                frameCount++;
-                if (currentGeoData) {
-                    currentGeoData.features.forEach(f => {
+                if (currentGeoData && currentGeoData.features) {
+                    // 批量更新，减少 DOM 操作
+                    const updates = [];
+                    
+                    for (let i = 0; i < currentGeoData.features.length; i++) {
+                        const f = currentGeoData.features[i];
                         const s = states[f.id];
-                        if (!s) return;
+                        if (!s) continue;
 
-                        // --- 1. 优先级绝对判定 ---
-                        // 强制检查 customColor 是否真的存在（使用更严格的检查，避免空字符串等问题）
+                        // 优先级判定：customColor > dataColor
                         let targetColor = null;
                         if (s.customColor && typeof s.customColor === 'string' && s.customColor.trim() !== '') {
                             targetColor = s.customColor;
@@ -1020,37 +985,37 @@
                             targetColor = s.dataColor;
                         }
 
-                        // --- 2. 暴力诊断：每 100 帧打印一次有颜色的块 ---
-                        if (frameCount % 100 === 0 && targetColor) {
-                            console.log(`[渲染诊断] 区域:${f.properties.name} | 模式:${window.isDataMode ? '数据' : '漫游'} | 颜色值:${targetColor}`);
-                        }
-
-                        // --- 3. 高度与动画 ---
+                        // 高度与动画
                         const targetH = window.isDataMode ? (s.targetH || BASE_H) : (s.elevated ? TARGET_H : BASE_H);
                         const targetB = (targetH > BASE_H) ? TARGET_LOW : BASE_LOW;
                         s.currH += (targetH - s.currH) * LERP_SPEED;
                         s.currB += (targetB - s.currB) * LERP_SPEED;
 
-                        // --- 4. 提交给 Shader ---
-                        // 构建状态对象，只在有颜色时才设置 customColor，避免覆盖已设置的颜色
+                        // 构建状态对象
                         const featureState = {
                             h: s.currH,
                             b: s.currB,
                             elevated: (targetH > BASE_H)
                         };
-                        // 只有当 targetColor 不为 null 时才设置，避免清除已设置的颜色
                         if (targetColor !== null) {
                             featureState.customColor = targetColor;
                         }
-                        // 如果处于数据模式且有 dataColor，也要设置
                         if (window.isDataMode && s.dataColor !== null && s.dataColor !== undefined) {
                             featureState.dataColor = s.dataColor;
                         }
-                        map.setFeatureState(
-                            { source: 'china-source', id: f.id },
-                            featureState
-                        );
-                    });
+                        
+                        updates.push({ id: f.id, state: featureState });
+                    }
+                    
+                    // 批量应用更新（优化：只在有更新时才执行）
+                    if (updates.length > 0) {
+                        for (let i = 0; i < updates.length; i++) {
+                            map.setFeatureState(
+                                { source: 'china-source', id: updates[i].id },
+                                updates[i].state
+                            );
+                        }
+                    }
                 }
                 requestAnimationFrame(frame);
             }
@@ -1123,7 +1088,7 @@
                 padding: PANEL_PADDING, 
                 duration: 1200, 
                 pitch: 45, 
-                maxZoom: 7, 
+                maxZoom: 6, 
                 essential: true
             });
         }

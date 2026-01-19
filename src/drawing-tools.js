@@ -68,21 +68,6 @@ class DrawingTools {
             return Math.atan2(dy, dx);
         },
         
-        // 二次贝塞尔曲线（保留用于兼容）
-        bezierPoint(p0, p1, p2, t) {
-            const u = 1 - t;
-            const x = u * u * p0[0] + 2 * u * t * p1[0] + t * t * p2[0];
-            const y = u * u * p0[1] + 2 * u * t * p1[1] + t * t * p2[1];
-            return [x, y];
-        },
-        
-        bezierTangent(p0, p1, p2, t) {
-            const u = 1 - t;
-            const dx = 2 * u * (p1[0] - p0[0]) + 2 * t * (p2[0] - p1[0]);
-            const dy = 2 * u * (p1[1] - p0[1]) + 2 * t * (p2[1] - p1[1]);
-            return Math.atan2(dy, dx);
-        },
-        
         // 生成椭圆坐标（支持旋转，使用地理坐标系统）
         generateEllipse(center, majorAxisKm, minorAxisKm, rotation, steps = 64) {
             const coords = [];
@@ -710,7 +695,7 @@ class DrawingTools {
                     </div>
                     <div class="dt-row" style="margin-bottom:0;">
                         <label><span>尾巴长度</span><span class="dt-chip">${((obj.tailLength || 0.5) * 100).toFixed(0)}%</span></label>
-                        <input type="range" class="dt-range" min="0" max="2" step="0.1" value="${obj.tailLength || 0.5}" id="dt-tail-length-input">
+                        <input type="range" class="dt-range" min="0" max="5" step="0.1" value="${obj.tailLength || 0.5}" id="dt-tail-length-input">
                     </div>
                 </div>
             `;

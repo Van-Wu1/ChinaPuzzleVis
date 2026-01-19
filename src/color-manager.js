@@ -71,8 +71,6 @@ class ColorManager {
             
             if (window.states[featureId]) {
                 window.states[featureId].customColor = color;
-                console.log(`[ColorManager] 已同步 states[${featureId}].customColor = ${color}`);
-                console.log(`[ColorManager] 当前 states[${featureId}] 完整状态:`, window.states[featureId]);
             } else {
                 // 更详细的调试信息
                 const allKeys = Object.keys(window.states);
@@ -98,7 +96,6 @@ class ColorManager {
                     elevated: currentState.elevated !== false // 保持当前的 elevated 状态
                 }
             );
-            console.log(`[ColorManager] 已更新 feature-state，customColor=${color}, elevated=${currentState.elevated}`);
 
         } else if (this.activeContext === 'background') {
             document.body.style.background = color;
