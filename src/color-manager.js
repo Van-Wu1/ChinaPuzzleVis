@@ -38,21 +38,101 @@ class ColorManager {
         return '#0071e3';
     }
 
-    setContext(context, id = null) {
+    setContext(context, id = null, featureName = null) {
         this.activeContext = context;
         // 确保 id 类型一致（转换为数字，因为 states 的 key 是数字）
         if (id !== null) {
             this.currentTargetId = typeof id === 'string' ? parseInt(id, 10) : id;
         }
+        
+        // 保存区域名称（用于显示标题）
+        if (featureName) {
+            this.currentFeatureName = featureName;
+        }
 
         // 切换 context 时，更新标题
         if (context !== 'tool') {
             const nameEl = document.getElementById('target-feature-name');
-            const titleMap = { 'feature': '区域颜色定制', 'background': '背景底色定制' };
-            if (nameEl) nameEl.innerText = titleMap[context] || '调色盘';
+            if (nameEl) {
+                if (context === 'feature' && featureName) {
+                    // 显示"xxx定制"
+                    nameEl.innerText = `${featureName}定制`;
+                } else {
+                    const titleMap = { 'feature': '区域颜色定制', 'background': '背景底色定制' };
+                    nameEl.innerText = titleMap[context] || '调色盘';
+                }
+            }
         }
 
         this._renderPaletteUI();
+        
+        // 延迟更新高度控制器，确保 DOM 已渲染
+        setTimeout(() => {
+            this._updateHeightControls();
+        }, 50);
+    }
+    
+    _updateHeightControls() {
+        const controlsEl = document.getElementById('feature-height-controls');
+        if (!controlsEl) return;
+        
+        // 只在 feature 模式下显示高度控制器
+        if (this.activeContext === 'feature' && this.currentTargetId !== null) {
+            controlsEl.classList.remove('hidden');
+            
+            const featureId = typeof this.currentTargetId === 'string' ? parseInt(this.currentTargetId, 10) : this.currentTargetId;
+            const s = window.states[featureId];
+            
+            if (s) {
+                // 获取当前高度（优先级：customHeight > targetH（数据模式）> TARGET_H（默认））
+                let currentHeight = s.customHeight;
+                if (!currentHeight) {
+                    // 如果没有自定义高度，检查是否有数据模式的高度
+                    if (window.isDataMode && s.targetH) {
+                        currentHeight = s.targetH;
+                    } else {
+                        currentHeight = (window.TARGET_H || 170000);
+                    }
+                }
+                
+                // 获取当前厚度（优先级：customThickness > 根据高度计算 > TARGET_LOW（默认））
+                let currentThickness = s.customThickness;
+                if (!currentThickness) {
+                    // 如果没有自定义厚度，根据高度计算（如果高度是自定义的）
+                    if (s.customHeight || (window.isDataMode && s.targetH)) {
+                        // 使用当前高度和底座高度计算厚度
+                        const baseHeight = s.currB || (window.BASE_LOW || 0);
+                        currentThickness = currentHeight - baseHeight;
+                        // 确保厚度在合理范围内
+                        if (currentThickness < 20000) currentThickness = 20000;
+                        if (currentThickness > 200000) currentThickness = 200000;
+                    } else {
+                        currentThickness = (window.TARGET_LOW || 80000);
+                    }
+                }
+                
+                // 更新滑块值
+                const heightSlider = document.getElementById('feature-height-slider');
+                const thicknessSlider = document.getElementById('feature-thickness-slider');
+                const heightValue = document.getElementById('feature-height-value');
+                const thicknessValue = document.getElementById('feature-thickness-value');
+                
+                if (heightSlider) {
+                    heightSlider.value = currentHeight;
+                }
+                if (thicknessSlider) {
+                    thicknessSlider.value = currentThickness;
+                }
+                if (heightValue) {
+                    heightValue.innerText = currentHeight.toLocaleString();
+                }
+                if (thicknessValue) {
+                    thicknessValue.innerText = currentThickness.toLocaleString();
+                }
+            }
+        } else {
+            controlsEl.classList.add('hidden');
+        }
     }
 
     updateColor(color) {
@@ -206,5 +286,17 @@ class ColorManager {
         const panel = document.getElementById('feature-customization');
         if (panel) panel.classList.add('hidden');
         this.currentTargetId = null;
+        this.currentFeatureName = null;
+    }
+    
+    // 检查并自动关闭面板（当板块降下时调用）
+    checkAndCloseIfNeeded(featureId) {
+        // 如果当前打开的面板是针对这个板块的，且板块已降下，则关闭面板
+        if (this.activeContext === 'feature' && this.currentTargetId === featureId) {
+            const s = window.states[featureId];
+            if (s && !s.elevated) {
+                this.hideCustomizer();
+            }
+        }
     }
 }

@@ -173,6 +173,8 @@ class DataHub {
             states[id].customColor = null;
             states[id].dataColor = null;
             states[id].targetH = null;
+            states[id].customHeight = null;  // 清除自定义高度
+            states[id].customThickness = null;  // 清除自定义厚度
         });
         elevatedIds.clear();
 
@@ -204,14 +206,41 @@ class DataHub {
                 // 存入 dataColor，而不是 customColor
                 s.dataColor = this.interpolateColor(colors[colorIdx], colors[colorIdx + 1], localRatio);
 
+                // 【关键】数据模式下，设置 elevated = true，让板块升起并显示数据
+                s.elevated = true;
+                
                 // 记录 ID 方便 zoomToSelection 等功能使用
                 elevatedIds.add(id);
+                
+                // 立即更新地图状态，确保颜色和高度立即显示
+                const map = window.map;
+                if (map) {
+                    // 获取全局常量
+                    const BASE_H = window.BASE_H || 70000;
+                    const TARGET_LOW = window.TARGET_LOW || 80000;
+                    
+                    map.setFeatureState(
+                        { source: 'china-source', id: id },
+                        {
+                            h: s.targetH,
+                            b: (s.targetH > BASE_H) ? TARGET_LOW : 0,
+                            elevated: true,
+                            dataColor: s.dataColor
+                        }
+                    );
+                    
+                    // 同步更新当前高度，确保动画循环能正确工作
+                    s.currH = s.targetH;
+                    s.currB = (s.targetH > BASE_H) ? TARGET_LOW : 0;
+                }
             }
         });
 
         if (document.getElementById('tab-btn-symbology').classList.contains('active')) {
             this.renderSymbology();
         }
+        
+        // 注意：按钮状态在数据导入成功时已经更新，这里不需要再次更新
     }
 
     interpolateColor(c1, c2, f) {
@@ -221,16 +250,25 @@ class DataHub {
         return `#${hex(r1 + (r2 - r1) * f)}${hex(g1 + (g2 - g1) * f)}${hex(b1 + (b2 - b1) * f)}`;
     }
 
-    open() { document.getElementById('data-hub-panel').classList.add('open'); }
+    open() { 
+        document.getElementById('data-hub-panel').classList.add('open');
+        // 注意：按钮状态在数据导入成功时已经更新，这里不需要再次更新
+    }
     close() { 
         // 只关闭面板，不清除地图效果（保留数据可视化）
         // 只有点击"重置数据"才会清除效果
-        document.getElementById('data-hub-panel').classList.remove('open'); 
+        document.getElementById('data-hub-panel').classList.remove('open');
+        // 注意：关闭面板不改变 isDataMode，所以按钮状态不变
     }
 
     // 新增：专门清除地图效果的方法，回归漫游模式
     clearMapEffects() {
         window.isDataMode = false;
+        
+        // 更新加载项目按钮状态
+        if (window.updateLoadProjectButtonState) {
+            window.updateLoadProjectButtonState();
+        }
         
         // 获取全局 map 对象（在 v10ing.html 中定义）
         const map = window.map;
@@ -287,6 +325,11 @@ class DataHub {
             const fileInput = document.getElementById('dh-input');
             if (fileInput) {
                 fileInput.value = '';
+            }
+            
+            // 【关键】重置数据后，重新启用加载项目按钮
+            if (window.updateLoadProjectButtonState) {
+                window.updateLoadProjectButtonState();
             }
         }
     }
@@ -483,7 +526,11 @@ class DataHub {
         const hasValidExtension = validExtensions.some(ext => fileName.endsWith(ext));
         
         if (!hasValidExtension) {
-            alert('文件格式不支持。请上传 .xlsx、.xls 或 .csv 格式的文件');
+            if (window.showToast) {
+                window.showToast('文件格式不支持。请上传 .xlsx、.xls 或 .csv 格式的文件', 'error', 4000);
+            } else {
+                alert('文件格式不支持。请上传 .xlsx、.xls 或 .csv 格式的文件');
+            }
             const fileInput = document.getElementById('dh-input');
             if (fileInput) {
                 fileInput.value = '';
@@ -504,7 +551,11 @@ class DataHub {
                     const validation = this.validateFileFormat(this.data, this.headers);
                     
                     if (!validation.valid) {
-                        alert(validation.message);
+                        if (window.showToast) {
+                            window.showToast(validation.message, 'error', 4000);
+                        } else {
+                            alert(validation.message);
+                        }
                         console.warn('[DataHub] 文件格式验证失败:', validation.message);
                         // 重置文件输入框
                         const fileInput = document.getElementById('dh-input');
@@ -517,12 +568,26 @@ class DataHub {
                     // 【关键】：成功导入数据后，清除漫游模式的颜色和升降状态
                     this.clearRoamModeEffects();
                     
+                    // 显示成功提示
+                    if (window.showToast) {
+                        window.showToast(`数据导入成功！共导入 ${this.data.length} 条记录`, 'success', 3000);
+                    }
+                    
+                    // 【关键】数据导入成功后，立即禁用加载项目按钮
+                    if (window.updateLoadProjectButtonState) {
+                        window.updateLoadProjectButtonState();
+                    }
+                    
                     this.open();
                     document.getElementById('manage-data-box').classList.remove('hidden');
                     this.switchTab('table');
                 } else {
                     console.warn('[DataHub] 导入的数据为空');
-                    alert('导入的文件中没有数据，请检查文件格式');
+                    if (window.showToast) {
+                        window.showToast('导入的文件中没有数据，请检查文件格式', 'warning', 4000);
+                    } else {
+                        alert('导入的文件中没有数据，请检查文件格式');
+                    }
                     // 重置文件输入框
                     const fileInput = document.getElementById('dh-input');
                     if (fileInput) {
@@ -531,7 +596,11 @@ class DataHub {
                 }
             } catch (error) {
                 console.error('[DataHub] 文件解析失败:', error);
-                alert('文件解析失败，请确保文件格式正确（.xlsx、.xls 或 .csv），且文件未损坏');
+                if (window.showToast) {
+                    window.showToast('文件解析失败，请确保文件格式正确（.xlsx、.xls 或 .csv），且文件未损坏', 'error', 4000);
+                } else {
+                    alert('文件解析失败，请确保文件格式正确（.xlsx、.xls 或 .csv），且文件未损坏');
+                }
                 // 重置文件输入框
                 const fileInput = document.getElementById('dh-input');
                 if (fileInput) {
@@ -542,7 +611,11 @@ class DataHub {
         
         reader.onerror = (error) => {
             console.error('[DataHub] 文件读取失败:', error);
-            alert('文件读取失败，请重试');
+            if (window.showToast) {
+                window.showToast('文件读取失败，请重试', 'error', 4000);
+            } else {
+                alert('文件读取失败，请重试');
+            }
             // 重置文件输入框
             const fileInput = document.getElementById('dh-input');
             if (fileInput) {

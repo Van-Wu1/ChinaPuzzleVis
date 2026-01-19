@@ -5,8 +5,9 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>拼图中国_v10
-    </title>
+    <title>拼图中国_v10</title>
+    <link rel="icon" type="image/png" href="icon.png">
+    <link rel="apple-touch-icon" href="icon.png">
     <script src="https://unpkg.com/maplibre-gl@3.x/dist/maplibre-gl.js"></script>
     <link href="https://unpkg.com/maplibre-gl@3.x/dist/maplibre-gl.css" rel="stylesheet" />
     <script src="https://cdn.tailwindcss.com"></script>
@@ -14,6 +15,104 @@
     <script src="https://cdn.sheetjs.com/xlsx-0.19.3/package/dist/xlsx.full.min.js"></script>
     <link rel="stylesheet" href="src/data-hub.css">
     <style>
+        /* 自定义提示框样式 */
+        #toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10000;
+            pointer-events: none;
+        }
+        
+        .toast {
+            min-width: 320px;
+            max-width: 420px;
+            padding: 16px 20px;
+            margin-bottom: 12px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);
+            border: 1px solid rgba(0, 0, 0, 0.06);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            pointer-events: auto;
+            transform: translateX(400px);
+            opacity: 0;
+            transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        
+        .toast.show {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        
+        .toast.success {
+            border-left: 4px solid #10b981;
+        }
+        
+        .toast.error {
+            border-left: 4px solid #ef4444;
+        }
+        
+        .toast.warning {
+            border-left: 4px solid #f59e0b;
+        }
+        
+        .toast.info {
+            border-left: 4px solid #3b82f6;
+        }
+        
+        .toast-icon {
+            width: 24px;
+            height: 24px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .toast.success .toast-icon {
+            color: #10b981;
+        }
+        
+        .toast.error .toast-icon {
+            color: #ef4444;
+        }
+        
+        .toast.warning .toast-icon {
+            color: #f59e0b;
+        }
+        
+        .toast.info .toast-icon {
+            color: #3b82f6;
+        }
+        
+        .toast-content {
+            flex: 1;
+            font-size: 14px;
+            line-height: 1.5;
+            color: #1f2937;
+            font-weight: 500;
+        }
+        
+        .toast-close {
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
+            cursor: pointer;
+            opacity: 0.5;
+            transition: opacity 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .toast-close:hover {
+            opacity: 1;
+        }
+        
         body {
             margin: 0;
             padding: 0;
@@ -341,6 +440,13 @@
                 <div id="lvl-c" onclick="setLevel('city')" class="level-btn">市级</div>
                 <div id="lvl-d" onclick="setLevel('district')" class="level-btn">区级</div>
             </div>
+            <!-- 区域搜索框 -->
+            <div class="mt-2">
+                <input type="text" id="region-search-input" placeholder="搜索区域..." 
+                    class="w-full px-3 py-1.5 text-[11px] bg-white/60 border border-black/10 rounded-lg outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500/50"
+                    oninput="searchRegion(this.value)">
+                <div id="search-results" class="hidden mt-1 max-h-32 overflow-y-auto bg-white/80 rounded-lg border border-black/10"></div>
+            </div>
             <div class="flex justify-between items-center border-t border-black/5 pt-1.5">
                 <span class="text-[10px] text-gray-400 font-medium">数据状态</span>
                 <span id="data-source"
@@ -412,6 +518,28 @@
                 </div>
 
                 <div id="palette-container"></div>
+                
+                <!-- 高度和厚度控制器 -->
+                <div id="feature-height-controls" class="hidden space-y-3 pt-2 border-t border-indigo-100/50">
+                    <div>
+                        <label class="flex justify-between items-center text-[11px] text-indigo-700 mb-1.5">
+                            <span>升起高度</span>
+                            <span id="feature-height-value" class="font-semibold">170000</span>
+                        </label>
+                        <input type="range" id="feature-height-slider" min="100000" max="500000" step="10000" value="170000" 
+                            class="w-full h-1.5 bg-indigo-100 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                            oninput="updateFeatureHeight(this.value)">
+                    </div>
+                    <div>
+                        <label class="flex justify-between items-center text-[11px] text-indigo-700 mb-1.5">
+                            <span>板块厚度</span>
+                            <span id="feature-thickness-value" class="font-semibold">80000</span>
+                        </label>
+                        <input type="range" id="feature-thickness-slider" min="20000" max="200000" step="5000" value="80000" 
+                            class="w-full h-1.5 bg-indigo-100 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                            oninput="updateFeatureThickness(this.value)">
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -455,6 +583,28 @@
                 </svg>
                 导出当前地图 (PNG)
             </button>
+            
+            <div class="flex gap-2 mt-2">
+                <button onclick="saveProject()"
+                    class="flex-1 btn-secondary text-[11px] flex items-center justify-center gap-1.5">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                        <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                        <polyline points="7 3 7 8 15 8"></polyline>
+                    </svg>
+                    保存项目
+                </button>
+                <button id="load-project-btn" onclick="loadProject()"
+                    class="flex-1 btn-secondary text-[11px] flex items-center justify-center gap-1.5">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    加载项目
+                </button>
+            </div>
+            <input type="file" id="project-file-input" class="hidden" accept=".json" onchange="handleProjectLoad(event)">
         </div>
 
         <div class="mt-5 pt-4 border-t border-black/5 text-[9px] text-gray-400 leading-relaxed">
@@ -466,8 +616,69 @@
     <div id="map"></div>
     <div id="tooltip" class="map-tooltip"></div>
     <div id="data-hub-root"></div>
+    
+    <!-- 自定义提示框容器 -->
+    <div id="toast-container"></div>
 
     <script>
+        // 自定义提示框功能
+        function showToast(message, type = 'info', duration = 3000) {
+            const container = document.getElementById('toast-container');
+            if (!container) {
+                // 如果容器不存在，创建它
+                const newContainer = document.createElement('div');
+                newContainer.id = 'toast-container';
+                document.body.appendChild(newContainer);
+            }
+            
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            
+            // 图标 SVG
+            let iconSvg = '';
+            if (type === 'success') {
+                iconSvg = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>';
+            } else if (type === 'error') {
+                iconSvg = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>';
+            } else if (type === 'warning') {
+                iconSvg = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>';
+            } else {
+                iconSvg = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>';
+            }
+            
+            toast.innerHTML = `
+                <div class="toast-icon">${iconSvg}</div>
+                <div class="toast-content">${message}</div>
+                <div class="toast-close" onclick="this.parentElement.remove()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </div>
+            `;
+            
+            document.getElementById('toast-container').appendChild(toast);
+            
+            // 触发显示动画
+            setTimeout(() => {
+                toast.classList.add('show');
+            }, 10);
+            
+            // 自动关闭
+            if (duration > 0) {
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                    setTimeout(() => {
+                        if (toast.parentElement) {
+                            toast.remove();
+                        }
+                    }, 400);
+                }, duration);
+            }
+        }
+        
+        // 全局暴露函数
+        window.showToast = showToast;
         const PANEL_PADDING = { top: 40, bottom: 40, left: 180, right: 40 };
         const INITIAL_VIEW = { center: [98, 35], zoom: 3.7, pitch: 45, bearing: 0 };
 
@@ -483,6 +694,12 @@
 
         const TARGET_H = 170000;    // 抬升后的顶部高度
         const TARGET_LOW = 80000;  // 抬升后的底部位置
+        
+        // 暴露到全局，供其他模块使用
+        window.BASE_H = BASE_H;
+        window.BASE_LOW = BASE_LOW;
+        window.TARGET_H = TARGET_H;
+        window.TARGET_LOW = TARGET_LOW;
 
         const LERP_SPEED = 0.07;   // 动画速度 (0-1)
 
@@ -538,6 +755,9 @@
             colorMgr = new ColorManager(map, window.dt);
 
             map.jumpTo({ ...INITIAL_VIEW, padding: PANEL_PADDING });
+            
+            // 初始化加载项目按钮状态
+            updateLoadProjectButtonState();
 
             map.on('mousedown', (e) => {
                 isMouseDown = true;
@@ -670,7 +890,7 @@
 
             } catch (err) {
                 console.error("导出失败:", err);
-                alert("导出失败，请降低 exportDPR 后重试。");
+                showToast("导出失败，请降低 exportDPR 后重试。", 'error', 4000);
             }
         }
 
@@ -887,22 +1107,32 @@
 
         // 处理点击：只切换状态，不直接改地图，交给动画循环去改高度
         function handleFeatureClick(feature) {
-            // 如果是数据模式，完全禁止点击
-            if (window.isDataMode) return;
-
             // 确保 id 类型一致（转换为数字，因为 states 的 key 是数字）
             const featureId = typeof feature.id === 'string' ? parseInt(feature.id, 10) : feature.id;
             const s = states[featureId];
             if (!s) return;
 
-            // 切换升降状态
+            // 切换升降状态（数据模式和漫游模式逻辑相同）
             s.elevated = !s.elevated;
 
             // 同步更新 elevatedIds，确保 zoomToSelection 能正确工作
             if (s.elevated) {
                 elevatedIds.add(featureId);
+                // 升起时，如果没有自定义高度，使用默认值
+                // 保持现有的自定义值（如果有）
+                // 数据模式下，如果有 targetH，保持它；如果没有，使用默认 TARGET_H
             } else {
                 elevatedIds.delete(featureId);
+                // 降下时，清除自定义高度和厚度
+                s.customHeight = null;
+                s.customThickness = null;
+                // 注意：不清除 targetH 和 dataColor，因为它们是数据模式的基础数据
+                // 降下只是视觉上的降下，数据仍然保留
+                
+                // 如果当前打开的面板是针对这个板块的，自动关闭面板
+                if (window.colorMgr) {
+                    window.colorMgr.checkAndCloseIfNeeded(featureId);
+                }
             }
 
             // 左键点击不调用色盘，只有右键在升起状态下才调用色盘
@@ -924,45 +1154,58 @@
             }
             
             if (window.colorMgr) {
-                window.colorMgr.setContext('feature', featureId);
+                // 获取区域名称
+                const featureName = feature.properties.name || '未知区域';
+                window.colorMgr.setContext('feature', featureId, featureName);
             }
         }
 
         // 【修复版】clearSelection（性能优化：批量更新）
         function clearSelection() {
             if (currentGeoData && currentGeoData.features) {
-                const updates = [];
                 for (let i = 0; i < currentGeoData.features.length; i++) {
                     const f = currentGeoData.features[i];
                     const s = states[f.id];
                     if (!s) continue;
 
-                    // 重置状态
+                    // 重置状态：清除升降、自定义高度、厚度和颜色
                     s.elevated = false;
-                    if (typeof s.targetH !== 'undefined') s.targetH = null;
                     s.customColor = null;
+                    s.customHeight = null;
+                    s.customThickness = null;
+                    // 清除 dataColor，让颜色回归默认
+                    s.dataColor = null;
 
-                    updates.push({
-                        id: f.id,
-                        state: {
-                            h: s.currH,
-                            b: s.currB,
-                            elevated: false,
-                            customColor: null
-                        }
-                    });
+                    // 注意：不清除 targetH，因为它可能是数据模式的数据
+                    // 但清除 dataColor，让视觉效果回归默认
+                    // 如果用户想要清除数据模式的数据，应该使用"重置数据"功能
+
+                    // 不直接设置 currH = BASE_H，而是让动画循环逐渐降下来
+                    // 这样会有平滑的动画效果
                 }
                 
-                // 批量更新地图状态
-                for (let i = 0; i < updates.length; i++) {
+                // 批量更新地图状态（清除颜色，高度通过动画循环逐渐降下）
+                for (let i = 0; i < currentGeoData.features.length; i++) {
+                    const f = currentGeoData.features[i];
+                    const s = states[f.id];
+                    if (!s) continue;
+                    
                     map.setFeatureState(
-                        { source: 'china-source', id: updates[i].id },
-                        updates[i].state
+                        { source: 'china-source', id: f.id },
+                        {
+                            elevated: false,
+                            customColor: null,
+                            dataColor: null  // 清除数据颜色
+                        }
                     );
                 }
             }
             elevatedIds.clear();
-            hideCustomizer();
+            
+            // 关闭定制面板（如果打开的话）
+            if (window.colorMgr) {
+                window.colorMgr.hideCustomizer();
+            }
         }
 
         // 动画驱动引擎：每帧更新所有板块的高度（性能优化版）
@@ -986,8 +1229,25 @@
                         }
 
                         // 高度与动画
-                        const targetH = window.isDataMode ? (s.targetH || BASE_H) : (s.elevated ? TARGET_H : BASE_H);
-                        const targetB = (targetH > BASE_H) ? TARGET_LOW : BASE_LOW;
+                        // 优先使用自定义高度（如果设置了），否则使用默认逻辑
+                        let targetH, targetB;
+                        if (s.elevated && s.customHeight) {
+                            // 使用自定义高度
+                            targetH = s.customHeight;
+                            targetB = targetH - (s.customThickness || TARGET_LOW);
+                        } else if (s.elevated && window.isDataMode && s.targetH) {
+                            // 数据模式下，如果升起了且有 targetH，使用 targetH
+                            targetH = s.targetH;
+                            targetB = (targetH > BASE_H) ? TARGET_LOW : BASE_LOW;
+                        } else if (s.elevated && !window.isDataMode) {
+                            // 非数据模式下，如果升起了，使用默认 TARGET_H
+                            targetH = TARGET_H;
+                            targetB = TARGET_LOW;
+                        } else {
+                            // 降下状态：无论什么模式都使用 BASE_H
+                            targetH = BASE_H;
+                            targetB = BASE_LOW;
+                        }
                         s.currH += (targetH - s.currH) * LERP_SPEED;
                         s.currB += (targetB - s.currB) * LERP_SPEED;
 
@@ -1039,6 +1299,82 @@
         function updateFeatureColor(color) { colorMgr.updateFeatureColor(color); }
 
         function hideCustomizer() { colorMgr.hideCustomizer(); }
+        
+        // 更新板块高度
+        function updateFeatureHeight(value) {
+            const height = parseInt(value, 10);
+            const valueEl = document.getElementById('feature-height-value');
+            if (valueEl) {
+                valueEl.innerText = height.toLocaleString();
+            }
+            
+            if (window.colorMgr && window.colorMgr.currentTargetId !== null) {
+                const featureId = window.colorMgr.currentTargetId;
+                const s = states[featureId];
+                if (s) {
+                    // 保存自定义高度
+                    s.customHeight = height;
+                    
+                    // 计算底座高度（厚度 = 高度 - 底座）
+                    const thickness = s.customThickness || TARGET_LOW;
+                    const baseHeight = height - thickness;
+                    
+                    // 更新当前高度和底座
+                    s.currH = height;
+                    s.currB = baseHeight;
+                    
+                    // 立即更新地图状态
+                    map.setFeatureState(
+                        { source: 'china-source', id: featureId },
+                        {
+                            h: height,
+                            b: baseHeight,
+                            elevated: true,
+                            customColor: s.customColor || null,
+                            dataColor: s.dataColor || null
+                        }
+                    );
+                }
+            }
+        }
+        
+        // 更新板块厚度
+        function updateFeatureThickness(value) {
+            const thickness = parseInt(value, 10);
+            const valueEl = document.getElementById('feature-thickness-value');
+            if (valueEl) {
+                valueEl.innerText = thickness.toLocaleString();
+            }
+            
+            if (window.colorMgr && window.colorMgr.currentTargetId !== null) {
+                const featureId = window.colorMgr.currentTargetId;
+                const s = states[featureId];
+                if (s) {
+                    // 保存自定义厚度
+                    s.customThickness = thickness;
+                    
+                    // 获取当前高度
+                    const height = s.customHeight || s.currH || TARGET_H;
+                    const baseHeight = height - thickness;
+                    
+                    // 更新当前高度和底座
+                    s.currH = height;
+                    s.currB = baseHeight;
+                    
+                    // 立即更新地图状态
+                    map.setFeatureState(
+                        { source: 'china-source', id: featureId },
+                        {
+                            h: height,
+                            b: baseHeight,
+                            elevated: true,
+                            customColor: s.customColor || null,
+                            dataColor: s.dataColor || null
+                        }
+                    );
+                }
+            }
+        }
 
         function resetView() { map.flyTo({ ...INITIAL_VIEW, padding: PANEL_PADDING, duration: 1500 }); }
 
@@ -1091,6 +1427,332 @@
                 maxZoom: 6, 
                 essential: true
             });
+        }
+        
+        // 区域搜索功能
+        function searchRegion(query) {
+            const resultsDiv = document.getElementById('search-results');
+            if (!query || query.trim() === '') {
+                resultsDiv.classList.add('hidden');
+                return;
+            }
+            
+            if (!currentGeoData || !currentGeoData.features) {
+                return;
+            }
+            
+            const q = query.toLowerCase().trim();
+            const matches = [];
+            
+            // 简单拼音转换（常用省份城市）
+            const pinyinMap = {
+                'beijing': '北京', 'shanghai': '上海', 'guangdong': '广东', 'jiangsu': '江苏',
+                'zhejiang': '浙江', 'shandong': '山东', 'henan': '河南', 'sichuan': '四川',
+                'hubei': '湖北', 'hunan': '湖南', 'fujian': '福建', 'anhui': '安徽'
+            };
+            
+            currentGeoData.features.forEach((f, index) => {
+                const name = f.properties.name || '';
+                const nameLower = name.toLowerCase();
+                
+                // 直接匹配
+                if (nameLower.includes(q)) {
+                    matches.push({ name, id: f.id, index });
+                }
+                // 拼音匹配
+                else {
+                    for (const [pinyin, chinese] of Object.entries(pinyinMap)) {
+                        if (pinyin.includes(q) && name.includes(chinese)) {
+                            matches.push({ name, id: f.id, index });
+                            break;
+                        }
+                    }
+                }
+            });
+            
+            if (matches.length > 0) {
+                resultsDiv.innerHTML = matches.slice(0, 10).map(m => 
+                    `<div onclick="zoomToRegion(${m.id}, '${m.name}')" 
+                        class="px-3 py-1.5 text-[11px] hover:bg-blue-50 cursor-pointer border-b border-black/5 last:border-0">
+                        ${m.name}
+                    </div>`
+                ).join('');
+                resultsDiv.classList.remove('hidden');
+            } else {
+                resultsDiv.innerHTML = '<div class="px-3 py-1.5 text-[11px] text-gray-400">未找到匹配区域</div>';
+                resultsDiv.classList.remove('hidden');
+            }
+        }
+        
+        function zoomToRegion(featureId, name) {
+            const feature = currentGeoData.features.find(f => f.id === featureId);
+            if (!feature) return;
+            
+            // 计算该区域的边界
+            const bounds = new maplibregl.LngLatBounds();
+            const proc = (c) => {
+                if (typeof c[0] === 'number') {
+                    bounds.extend(c);
+                } else {
+                    c.forEach(proc);
+                }
+            };
+            proc(feature.geometry.coordinates);
+            
+            map.fitBounds(bounds, {
+                padding: PANEL_PADDING,
+                duration: 1200,
+                pitch: 45,
+                maxZoom: 7,
+                essential: true
+            });
+            
+            // 高亮该区域
+            const s = states[featureId];
+            if (s) {
+                s.elevated = true;
+                elevatedIds.add(featureId);
+            }
+            
+            // 关闭搜索结果
+            document.getElementById('search-results').classList.add('hidden');
+            document.getElementById('region-search-input').value = '';
+        }
+        
+        // 项目保存/加载功能
+        function saveProject() {
+            const project = {
+                version: '1.0',
+                timestamp: new Date().toISOString(),
+                view: {
+                    center: map.getCenter(),
+                    zoom: map.getZoom(),
+                    pitch: map.getPitch(),
+                    bearing: map.getBearing()
+                },
+                currentLevel: currentLevel || 'province',
+                currentAdcode: currentAdcode || null,
+                objects: window.dt ? window.dt.objects : [],
+                states: Object.keys(states).reduce((acc, id) => {
+                    const s = states[id];
+                    // 如果是在数据模式下，且有 targetH 但没有 customHeight，将 targetH 转换为 customHeight
+                    let customHeight = s.customHeight;
+                    let customThickness = s.customThickness;
+                    
+                    if (!customHeight && s.targetH && s.elevated) {
+                        // 数据模式下：将 targetH 转换为 customHeight，以便加载项目后能正确显示
+                        customHeight = s.targetH;
+                        // 计算厚度（如果当前高度和底座高度已知）
+                        if (s.currH && s.currB !== undefined) {
+                            customThickness = s.currH - s.currB;
+                            // 确保厚度在合理范围内
+                            if (customThickness < 20000) customThickness = 20000;
+                            if (customThickness > 200000) customThickness = 200000;
+                        } else {
+                            // 如果没有当前高度信息，使用默认厚度
+                            customThickness = TARGET_LOW;
+                        }
+                    }
+                    
+                    acc[id] = {
+                        elevated: s.elevated,
+                        customColor: s.customColor,
+                        dataColor: s.dataColor,
+                        targetH: s.targetH,
+                        customHeight: customHeight || null,
+                        customThickness: customThickness || null
+                    };
+                    return acc;
+                }, {}),
+                elevatedIds: Array.from(elevatedIds)
+            };
+            
+            const dataStr = JSON.stringify(project, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `拼图中国项目_${new Date().getTime()}.json`;
+            link.click();
+            URL.revokeObjectURL(url);
+        }
+        
+        function loadProject() {
+            // 检查是否有数据（通过检查 hub 是否有数据，或者 isDataMode）
+            const hasData = (window.hub && window.hub.data && window.hub.data.length > 0) || window.isDataMode;
+            
+            if (hasData) {
+                if (window.showToast) {
+                    window.showToast('请先清空已有表格数据后再加载项目', 'warning', 3000);
+                } else {
+                    alert('请先清空已有表格数据后再加载项目');
+                }
+                return;
+            }
+            document.getElementById('project-file-input').click();
+        }
+        
+        // 更新加载项目按钮状态
+        function updateLoadProjectButtonState() {
+            const btn = document.getElementById('load-project-btn');
+            if (!btn) return;
+            
+            // 检查是否有数据（通过检查 hub 是否有数据，或者 isDataMode）
+            const hasData = (window.hub && window.hub.data && window.hub.data.length > 0) || window.isDataMode;
+            
+            if (hasData) {
+                // 有数据：禁用按钮
+                btn.disabled = true;
+                btn.classList.add('opacity-50', 'cursor-not-allowed');
+                btn.classList.remove('hover:bg-white/90');
+            } else {
+                // 无数据：启用按钮
+                btn.disabled = false;
+                btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                btn.classList.add('hover:bg-white/90');
+            }
+        }
+        
+        function handleProjectLoad(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const project = JSON.parse(e.target.result);
+                    
+                    // 恢复到默认视角（不根据保存时的视角）
+                    map.flyTo({
+                        ...INITIAL_VIEW,
+                        padding: PANEL_PADDING,
+                        duration: 1500
+                    });
+                    
+                    // 【重要】加载项目始终在漫游模式下，与数据模式（Excel导入）完全独立
+                    window.isDataMode = false;
+                    
+                    // 恢复层级
+                    if (project.currentLevel && project.currentLevel !== currentLevel) {
+                        setLevel(project.currentLevel);
+                    }
+                    
+                    // 等待地图加载完成后恢复对象和状态
+                    const restoreProject = () => {
+                        // 恢复绘图对象
+                        if (project.objects && window.dt) {
+                            window.dt.objects = project.objects;
+                            // 重置历史记录
+                            window.dt.historyStack = [];
+                            window.dt.historyIndex = -1;
+                            window.dt._saveHistory();
+                            window.dt.refresh();
+                        }
+                        
+                        // 恢复区域状态（完全按照漫游模式逻辑）
+                        if (project.states && currentGeoData && currentGeoData.features) {
+                            Object.keys(project.states).forEach(id => {
+                                const stateId = parseInt(id, 10);
+                                if (states[stateId]) {
+                                    const savedState = project.states[id];
+                                    
+                                    // 恢复状态对象（包括所有属性，但 targetH 和 dataColor 仅作为数据保留）
+                                    states[stateId].elevated = savedState.elevated || false;
+                                    states[stateId].customColor = savedState.customColor || null;
+                                    states[stateId].dataColor = savedState.dataColor || null; // 保留但不使用
+                                    states[stateId].targetH = savedState.targetH || null; // 保留但不使用
+                                    states[stateId].customHeight = savedState.customHeight || null;
+                                    states[stateId].customThickness = savedState.customThickness || null;
+                                    
+                                    // 根据 elevated 状态和自定义高度设置高度（漫游模式逻辑）
+                                    let targetH, targetB;
+                                    if (states[stateId].elevated) {
+                                        // 升起的区域
+                                        if (states[stateId].customHeight) {
+                                            // 有自定义高度，使用自定义高度
+                                            targetH = states[stateId].customHeight;
+                                            targetB = targetH - (states[stateId].customThickness || TARGET_LOW);
+                                        } else {
+                                            // 没有自定义高度，使用默认 TARGET_H
+                                            targetH = TARGET_H;
+                                            targetB = TARGET_LOW;
+                                        }
+                                        states[stateId].currH = targetH;
+                                        states[stateId].currB = targetB;
+                                    } else {
+                                        // 降下的区域
+                                        targetH = BASE_H;
+                                        targetB = BASE_LOW;
+                                        states[stateId].currH = BASE_H;
+                                        states[stateId].currB = BASE_LOW;
+                                    }
+                                    
+                                    // 立即更新地图的 feature state
+                                    map.setFeatureState(
+                                        { source: 'china-source', id: stateId },
+                                        {
+                                            h: targetH,
+                                            b: targetB,
+                                            elevated: states[stateId].elevated || false,
+                                            customColor: states[stateId].customColor || null,
+                                            dataColor: states[stateId].dataColor || null // 保留数据，但不影响渲染
+                                        }
+                                    );
+                                }
+                            });
+                        }
+                        
+                        // 恢复升起的区域（确保 elevatedIds 和 states 同步）
+                        if (project.elevatedIds) {
+                            elevatedIds.clear();
+                            project.elevatedIds.forEach(id => {
+                                elevatedIds.add(id);
+                                const s = states[id];
+                                if (s) {
+                                    s.elevated = true;
+                                    // 确保高度也正确设置（使用自定义高度或默认 TARGET_H）
+                                    let targetH, targetB;
+                                    if (s.customHeight) {
+                                        targetH = s.customHeight;
+                                        targetB = targetH - (s.customThickness || TARGET_LOW);
+                                    } else {
+                                        targetH = TARGET_H;
+                                        targetB = TARGET_LOW;
+                                    }
+                                    s.currH = targetH;
+                                    s.currB = targetB;
+                                    map.setFeatureState(
+                                        { source: 'china-source', id: id },
+                                        {
+                                            h: targetH,
+                                            b: targetB,
+                                            elevated: true,
+                                            customColor: s.customColor || null,
+                                            dataColor: s.dataColor || null
+                                        }
+                                    );
+                                }
+                            });
+                        }
+                    };
+                    
+                    // 如果地图已经加载，直接恢复；否则等待地图加载完成
+                    if (map.loaded()) {
+                        restoreProject();
+                    } else {
+                        map.once('load', restoreProject);
+                        // 也设置一个超时，防止地图加载事件未触发
+                        setTimeout(restoreProject, 1000);
+                    }
+                    
+                    showToast('项目加载成功！', 'success', 2500);
+                } catch (error) {
+                    console.error('项目加载失败:', error);
+                    showToast('项目文件格式错误，加载失败', 'error', 4000);
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = ''; // 重置文件输入
         }
     </script>
     <script src="./src/drawing-tools.js"></script>
