@@ -289,7 +289,7 @@ class DrawingTools {
                     });
                 } else {
                     // 直线箭头：箭杆用“尾巴宽度/中间宽度”，头部用“底边/高度”
-                    const { angle, dist } = this.getMetrics(p1, realP2);
+                const { angle, dist } = this.getMetrics(p1, realP2);
                     const headHeightScale = obj.headHeightScale ?? 1.0;
                     const headBaseScale = obj.headBaseScale ?? 1.0;
                     const hLen = Math.min(1.5, dist * 0.3) * headHeightScale;
@@ -414,7 +414,7 @@ class DrawingTools {
                         this.getPt(baseCenter, angle - Math.PI / 2, hWidth / 2),
                         [arrowTip.lng, arrowTip.lat]
                     ];
-                    features.push({ type: 'Feature', properties: { id, color }, geometry: { type: 'Polygon', coordinates: [headCoords] } });
+                features.push({ type: 'Feature', properties: { id, color }, geometry: { type: 'Polygon', coordinates: [headCoords] } });
                 }
             } 
             else if (type === 'circle' || type === 'ellipse') {
@@ -441,7 +441,7 @@ class DrawingTools {
                     const innerMajor = Math.max(0.001, majorAxis * hollow);
                     const innerMinor = Math.max(0.001, minorAxis * hollow);
                     const innerCoords = this.generateEllipse(p1, innerMajor, innerMinor, rotation, 64);
-                    
+
                     features.push({
                         type: 'Feature',
                         properties: { id, color },
@@ -631,10 +631,10 @@ class DrawingTools {
                 <div class="dt-card-title">
                     <span>编辑 · ${typeNames[obj.type] || obj.type}</span>
                     <span class="dt-chip">ID ${obj.id.slice(-6)}</span>
-                </div>
+                    </div>
                 <div class="dt-row" style="margin-bottom:0;">
                     <label><span>颜色</span><span class="dt-chip" style="background:rgba(0,0,0,0.04);border-color:rgba(0,0,0,0.06);color:rgba(28,28,30,0.7);">调色盘</span></label>
-                    <button id="dt-color-preview-btn" onclick="colorMgr.setContext('tool')"
+                    <button id="dt-color-preview-btn" onclick="colorMgr.setContext('tool')" 
                             style="height:40px;width:100%;border-radius:14px;border:1px solid rgba(0,0,0,0.06);background:${obj.color};box-shadow:0 10px 22px rgba(0,0,0,0.06);"></button>
                 </div>
             </div>
@@ -744,7 +744,7 @@ class DrawingTools {
                 if (obj) {
                     obj[key] = val;
                     this.refresh();
-                    
+
                     // 属性变化后同步更新控制框/控制点（例如：椭圆空心、长短轴、厚度等）
                     if (!this.isDragging) {
                         const bounds = this._getObjectBounds(obj);
@@ -892,9 +892,9 @@ class DrawingTools {
             } else {
                 const newObj = {
                     id: 'obj_' + Date.now(),
-                type: this.currentTool,
-                p1: { lng: this.drawingStart.lng, lat: this.drawingStart.lat },
-                p2: { lng: e.lngLat.lng, lat: e.lngLat.lat },
+                    type: this.currentTool,
+                    p1: { lng: this.drawingStart.lng, lat: this.drawingStart.lat },
+                    p2: { lng: e.lngLat.lng, lat: e.lngLat.lat },
                 color: '#1d1d1f',
                 width: 0.4,
                 headBaseScale: 1.0,
@@ -984,8 +984,8 @@ class DrawingTools {
                         this._printArrowTrapezoidPoints(obj);
                     }
                     this._showControlBox(obj);
-                    this._renderPropsPanel(obj);
-                    document.getElementById('dt-customizer').style.display = 'block';
+                this._renderPropsPanel(obj);
+                document.getElementById('dt-customizer').style.display = 'block';
                 }
             }
         });
@@ -1106,10 +1106,10 @@ class DrawingTools {
                 const inputIds = Array.isArray(inputId) ? inputId : [inputId];
                 inputIds.forEach(id => {
                     const el = document.getElementById(id);
-                    if (el) {
+                if (el) {
                         el.value = key === 'rotation' ? (value * 180 / Math.PI) : value;
-                        const valueDisplay = el.parentElement.querySelector('label span:last-child');
-                        if (valueDisplay) {
+                    const valueDisplay = el.parentElement.querySelector('label span:last-child');
+                    if (valueDisplay) {
                             if (key === 'rotation') {
                                 valueDisplay.innerText = (value * 180 / Math.PI).toFixed(0) + '°';
                             } else if (key === 'hollow') {

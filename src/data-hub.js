@@ -4,45 +4,209 @@
  */
 
 const COLOR_SCHEMES = {
-    'Blue-Sky': ['#e0f2fe', '#7dd3fc', '#0ea5e9', '#0369a1', '#075985'],
-    'Sunset-Orange': ['#fff7ed', '#ffedd5', '#fed7aa', '#fdba74', '#fb923c', '#f97316', '#ea580c'],
-    'Viridis-Eco': ['#f0fdf4', '#bbf7d0', '#4ade80', '#22c55e', '#16a34a', '#15803d'],
-    'Magma-Red': ['#fff1f2', '#fecdd3', '#fda4af', '#fb7185', '#f43f5e', '#e11d48', '#be123c'],
-    'ArcGIS-Hybrid': ['#edf8fb', '#b3cde3', '#8c96c6', '#8856a7', '#810f7c']
+    // 经典配色
+    'Blue-White': ['#ffffff', '#99cce0', '#4da6d9', '#0066cc'],
+    'Red-White': ['#ffffff', '#ffb3a7', '#ff8066', '#cc3300'],
+    'Green-White': ['#ffffff', '#b3e6b3', '#80d980', '#33cc33'],
+    'Yellow-Red': ['#ffffcc', '#ffcc00', '#f5a623', '#d93f00'], // 更强烈的红色
+    'Purple-Blue': ['#f7f7f7', '#a6bddb', '#74a9cf', '#3690c0'],
+    'Orange-Red': ['#fff5eb', '#fdd0a2', '#fdae6b', '#f16913'],
+    'Green-Blue': ['#f0f9ff', '#99d1ff', '#66b3ff', '#3399ff'],
+    'Gray-White': ['#ffffff', '#d9d9d9', '#808080', '#4d4d4d'],
+    'Pink-White': ['#ffffff', '#ffb3d9', '#ff80c0', '#ff4da6'],
+    'Cyan-Blue': ['#e0f7fa', '#b2ebf2', '#80deea', '#26c6da'],
+    
+    // 双色系渐变
+    'Blue-Red': ['#0066cc', '#99cce0', '#ffcccc', '#ff8080'],
+    'Blue-Orange': ['#0066cc', '#99cce0', '#ffe0cc', '#ff6600'],
+    'Red-Green': ['#cc3300', '#ff8080', '#ccffcc', '#80ff80'],
+    'Blue-Yellow': ['#0066cc', '#99cce0', '#ffffcc', '#ffcc00'],
+    'Purple-Green': ['#810f7c', '#d9a3d0', '#66cc66', '#009900'],
+    'Orange-Blue': ['#ff6600', '#ffe0cc', '#cce5ff', '#0066cc']
 };
+
+// 数据分类方法
+const CLASSIFICATION_METHODS = {
+    'equal-interval': '等间距',
+    'quantile': '分位数',
+    'natural-breaks': '自然断点',
+    'standard-deviation': '标准差'
+};
+
+// 分类算法实现
+class ClassificationAlgorithms {
+    /**
+     * 等间距分类：将数据范围等分为N个区间
+     */
+    static equalInterval(values, numClasses) {
+        const sorted = [...values].sort((a, b) => a - b);
+        const min = sorted[0];
+        const max = sorted[sorted.length - 1];
+        const interval = (max - min) / numClasses;
+        const breaks = [];
+        for (let i = 0; i <= numClasses; i++) {
+            breaks.push(min + interval * i);
+        }
+        return breaks;
+    }
+
+    /**
+     * 分位数分类：每个区间包含相同数量的数据点
+     */
+    static quantile(values, numClasses) {
+        const sorted = [...values].sort((a, b) => a - b);
+        const breaks = [sorted[0]];
+        const step = sorted.length / numClasses;
+        for (let i = 1; i < numClasses; i++) {
+            const index = Math.floor(i * step);
+            breaks.push(sorted[index]);
+        }
+        breaks.push(sorted[sorted.length - 1]);
+        return breaks;
+    }
+
+    /**
+     * 自然断点分类（Jenks算法）：根据数据分布的自然聚类点划分
+     */
+    static naturalBreaks(values, numClasses) {
+        const sorted = [...values].sort((a, b) => a - b);
+        const n = sorted.length;
+        if (n <= numClasses) {
+            return ClassificationAlgorithms.equalInterval(values, numClasses);
+        }
+
+        // 简化的Jenks算法实现
+        const breaks = [sorted[0]];
+        const step = n / numClasses;
+        for (let i = 1; i < numClasses; i++) {
+            const index = Math.floor(i * step);
+            breaks.push(sorted[index]);
+        }
+        breaks.push(sorted[n - 1]);
+
+        // 优化：寻找局部最小值作为断点
+        const optimizedBreaks = [sorted[0]];
+        for (let i = 1; i < numClasses; i++) {
+            const startIdx = Math.floor((i - 1) * step);
+            const endIdx = Math.floor(i * step);
+            let minIdx = startIdx;
+            let minVal = sorted[startIdx];
+            
+            // 在区间内寻找最小值
+            for (let j = startIdx; j <= endIdx && j < n; j++) {
+                if (sorted[j] < minVal) {
+                    minVal = sorted[j];
+                    minIdx = j;
+                }
+            }
+            optimizedBreaks.push(sorted[minIdx]);
+        }
+        optimizedBreaks.push(sorted[n - 1]);
+        
+        return optimizedBreaks;
+    }
+
+    /**
+     * 标准差分类：基于均值和标准差划分
+     */
+    static standardDeviation(values, numClasses) {
+        const sorted = [...values].sort((a, b) => a - b);
+        const mean = values.reduce((a, b) => a + b, 0) / values.length;
+        const variance = values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length;
+        const stdDev = Math.sqrt(variance);
+        
+        const breaks = [];
+        const min = sorted[0];
+        const max = sorted[sorted.length - 1];
+        
+        if (numClasses === 5) {
+            // 5类：-2σ, -1σ, 均值, +1σ, +2σ
+            breaks.push(min);
+            breaks.push(Math.max(min, mean - 2 * stdDev));
+            breaks.push(Math.max(min, mean - stdDev));
+            breaks.push(mean);
+            breaks.push(Math.min(max, mean + stdDev));
+            breaks.push(Math.min(max, mean + 2 * stdDev));
+            breaks.push(max);
+        } else {
+            // 其他情况使用等间距
+            return ClassificationAlgorithms.equalInterval(values, numClasses);
+        }
+        
+        // 去重并排序
+        return [...new Set(breaks)].sort((a, b) => a - b);
+    }
+
+    /**
+     * 计算分类断点
+     */
+    static calculateBreaks(values, method, numClasses = 5) {
+        if (!values || values.length === 0) return [];
+        
+        const validValues = values.filter(v => !isNaN(v) && isFinite(v));
+        if (validValues.length === 0) return [];
+
+        switch (method) {
+            case 'equal-interval':
+                return this.equalInterval(validValues, numClasses);
+            case 'quantile':
+                return this.quantile(validValues, numClasses);
+            case 'natural-breaks':
+                return this.naturalBreaks(validValues, numClasses);
+            case 'standard-deviation':
+                return this.standardDeviation(validValues, numClasses);
+            default:
+                return this.equalInterval(validValues, numClasses);
+        }
+    }
+
+    /**
+     * 根据断点获取值的分类索引
+     */
+    static getClassIndex(value, breaks) {
+        if (breaks.length === 0) return 0;
+        for (let i = 0; i < breaks.length - 1; i++) {
+            if (value <= breaks[i + 1]) {
+                return i;
+            }
+        }
+        return breaks.length - 2;
+    }
+}
 
 class DataHub {
     constructor() {
         this.data = [];
         this.headers = [];
         this.currentField = null;
-        this.currentScheme = 'Blue-Sky';
+        this.currentScheme = 'Blue-White';
+        this.currentMethod = 'equal-interval'; // 默认等间距
         this.isFuzzy = true;
     }
 
     init() {
         const template = `
-            <div id="data-hub-panel" style="display: flex; flex-direction: column;">
-                <div id="panel-resizer" class="dh-drag-handle" style="height: 12px; width: 100%; cursor: ns-resize; flex-shrink: 0; display: flex; justify-content: center; align-items: center;">
+            <div id="data-hub-panel" class="dh-panel-container">
+                <div id="panel-resizer" class="dh-drag-handle">
                     <div class="w-12 h-1 bg-gray-300/60 rounded-full"></div>
                 </div>
                 
-                <div class="dh-tabs" style="flex-shrink: 0;">
+                <div class="dh-tabs">
                     <div class="dh-tab-btn active" id="tab-btn-table" onclick="hub.switchTab('table')">
                         <span class="mr-1.5"></span>属性表
                     </div>
                     <div class="dh-tab-btn" id="tab-btn-symbology" onclick="hub.switchTab('symbology')">
                         <span class="mr-1.5"></span>符号系统
                     </div>
-                    <div style="flex:1"></div>
+                    <div class="dh-tabs-spacer"></div>
                     <button onclick="hub.reset()" class="text-[11px] font-bold text-gray-400 hover:text-red-500 transition-colors mr-5 tracking-wider uppercase">重置数据</button>
                     <div onclick="hub.close()" class="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100/80 hover:bg-gray-200 cursor-pointer transition-all">
                         <span class="text-gray-500 text-xs">✕</span>
                     </div>
                 </div>
 
-                <div id="dh-content-area" class="dh-content" style="flex: 1; overflow: hidden; padding: 20px;">
-                    </div>
+                <div id="dh-content-area" class="dh-content">
+                </div>
             </div>
         `;
         document.getElementById('data-hub-root').innerHTML = template;
@@ -67,7 +231,7 @@ class DataHub {
             if (!isResizing) return;
             const dy = startY - e.clientY;
             const newHeight = startHeight + dy;
-            if (newHeight > 240 && newHeight < window.innerHeight * 0.85) {
+            if (newHeight > 240 && newHeight <= 340) {
                 panel.style.height = `${newHeight}px`;
             }
         });
@@ -82,18 +246,18 @@ class DataHub {
     // 渲染属性表：解决穿透问题
     renderTable() {
         let html = `
-            <div style="height: 100%; display: flex; flex-direction: column;">
-                <div style="flex: 1; overflow: auto; border-radius: 12px; border: 1px solid rgba(0,0,0,0.05);">
-                    <table class="dh-table" style="width: 100%; border-collapse: separate; border-spacing: 0;">
-                        <thead style="position: sticky; top: 0; z-index: 20; background: #f9fafb; box-shadow: 0 1px 0 rgba(0,0,0,0.05);">
+            <div class="dh-table-wrapper">
+                <div class="dh-table-scroll">
+                    <table class="dh-table">
+                        <thead class="dh-table-header">
                             <tr>
-                                ${this.headers.map(h => `<th style="padding: 12px 16px; text-align: left; font-size: 12px; color: #9ca3af;">${h}</th>`).join('')}
+                                ${this.headers.map(h => `<th>${h}</th>`).join('')}
                             </tr>
                         </thead>
-                        <tbody style="background: white;">
+                        <tbody class="dh-table-body">
                             ${this.data.map(row => `
-                                <tr style="border-bottom: 1px solid #f3f4f6;">
-                                    ${this.headers.map(h => `<td style="padding: 12px 16px; font-size: 13px; color: #4b5563;">${row[h] || '-'}</td>`).join('')}
+                                <tr>
+                                    ${this.headers.map(h => `<td>${row[h] || '-'}</td>`).join('')}
                                 </tr>
                             `).join('')}
                         </tbody>
@@ -106,39 +270,83 @@ class DataHub {
 
     // 渲染符号系统：解决自适应问题
     renderSymbology() {
+        // 保存滚动位置
+        const scrollContainer = document.querySelector('.dh-color-palette-scroll');
+        const scrollTop = scrollContainer ? scrollContainer.scrollTop : 0;
+        
         const numericFields = this.headers.filter(h => !isNaN(parseFloat(this.data[0][h])));
+        
+        // 如果有选中的字段，计算直方图数据
+        let histogramData = null;
+        let breaks = null;
+        if (this.currentField) {
+            const values = this.data.map(d => parseFloat(d[this.currentField])).filter(v => !isNaN(v));
+            if (values.length > 0) {
+                const colors = COLOR_SCHEMES[this.currentScheme];
+                breaks = ClassificationAlgorithms.calculateBreaks(values, this.currentClassification, colors.length);
+                histogramData = this.calculateHistogram(values, breaks);
+            }
+        }
+        
         let html = `
-            <div style="display: flex; gap: 30px; height: 100%; align-items: stretch;">
-                <div style="width: 280px; flex-shrink: 0;" class="space-y-6">
-                    <div>
-                        <label class="block text-[11px] font-bold text-gray-400 mb-3 uppercase tracking-wider">1. 核心分析指标</label>
-                        <select id="field-select" class="w-full p-3 border-none rounded-2xl text-sm bg-gray-100 outline-none focus:ring-2 focus:ring-blue-500" 
-                                onchange="hub.applySymbology(this.value, hub.currentScheme)">
-                            <option value="">-- 请选择指标 --</option>
-                            ${numericFields.map(f => `<option value="${f}" ${this.currentField === f ? 'selected' : ''}>${f}</option>`).join('')}
-                        </select>
-                    </div>
-                    <div class="flex items-center gap-3 p-4 bg-blue-50/50 rounded-2xl border border-blue-100">
-                        <input type="checkbox" id="fuzzy-toggle" ${this.isFuzzy ? 'checked' : ''} onchange="hub.isFuzzy = this.checked" class="w-4 h-4 text-blue-600"> 
-                        <label for="fuzzy-toggle" class="text-xs font-bold text-blue-700 cursor-pointer">启用名称模糊匹配</label>
+            <div class="dh-symbology-layout">
+                <!-- 左列：控制选项 -->
+                <div class="dh-symbology-left">
+                    <div class="dh-controls-section space-y-6">
+                        <div>
+                            <label class="block text-[11px] font-bold text-gray-400 mb-3 uppercase tracking-wider">1. 核心分析指标</label>
+                            <select id="field-select" class="w-full p-3 border-none rounded-2xl text-sm bg-gray-100 outline-none focus:ring-2 focus:ring-blue-500" 
+                                    onchange="hub.onFieldChange(this.value)">
+                                <option value="">-- 请选择指标 --</option>
+                                ${numericFields.map(f => `<option value="${f}" ${this.currentField === f ? 'selected' : ''}>${f}</option>`).join('')}
+                            </select>
+                        </div>
+                        
+                        ${this.currentField ? `
+                        <div>
+                            <label class="block text-[11px] font-bold text-gray-400 mb-3 uppercase tracking-wider">2. 数据分层方法</label>
+                            <select id="method-select" class="w-full p-3 border-none rounded-2xl text-sm bg-gray-100 outline-none focus:ring-2 focus:ring-blue-500" 
+                                    onchange="hub.onMethodChange(this.value)">
+                                ${Object.keys(CLASSIFICATION_METHODS).map(m => 
+                                    `<option value="${m}" ${this.currentClassification === m ? 'selected' : ''}>${CLASSIFICATION_METHODS[m]}</option>`
+                                ).join('')}
+                            </select>
+                        </div>
+                        ` : ''}
+                        
+                        <div class="flex items-center gap-3 p-4 bg-blue-50/50 rounded-2xl border border-blue-100">
+                            <input type="checkbox" id="fuzzy-toggle" ${this.isFuzzy ? 'checked' : ''} onchange="hub.isFuzzy = this.checked" class="w-4 h-4 text-blue-600"> 
+                            <label for="fuzzy-toggle" class="text-xs font-bold text-blue-700 cursor-pointer">启用名称模糊匹配</label>
+                        </div>
                     </div>
                 </div>
 
-                <div style="flex: 1; display: flex; flex-direction: column; min-height: 0;">
-                    <label class="block text-[11px] font-bold text-gray-400 mb-2 uppercase tracking-wider">2. 视觉色板选择</label>
-                    <div class="custom-scroll" style="flex: 1; overflow-y: auto; padding-right: 8px;">
-                        <div style="display: grid; gap: 8px;">
+                <!-- 中列：直方图 -->
+                <div class="dh-symbology-center">
+                    <div class="dh-histogram-section">
+                        <label class="block text-[11px] font-bold text-gray-400 mb-2 uppercase tracking-wider">数据分布直方图</label>
+                        <div id="histogram-container">
+                            <canvas id="histogram-canvas"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 右列：色板选择 -->
+                <div class="dh-symbology-right">
+                    <label class="block text-[11px] font-bold text-gray-400 mb-2 uppercase tracking-wider">${this.currentField ? '3. ' : '2. '}视觉色板选择</label>
+                    <div class="dh-color-palette-scroll custom-scroll">
+                        <div class="dh-color-palette-grid">
                             ${Object.keys(COLOR_SCHEMES).map(name => {
             const isActive = this.currentScheme === name;
             const gradient = `linear-gradient(to right, ${COLOR_SCHEMES[name].join(', ')})`;
             return `
-                                    <div onclick="hub.applySymbology(document.getElementById('field-select').value, '${name}')" 
-                                         class="p-3 rounded-2xl cursor-pointer transition-all border ${isActive ? 'bg-white shadow-lg border-blue-500/30' : 'bg-gray-50/50 border-transparent hover:bg-white'}">
-                                        <div class="flex items-center justify-between mb-2 text-[10px] font-bold">
-                                            <span class="${isActive ? 'text-blue-600' : 'text-gray-500'}">${name}</span>
-                                            ${isActive ? '<span>●</span>' : ''}
+                                    <div onclick="hub.applySymbology(document.getElementById('field-select')?.value || '', '${name}')" 
+                                         class="dh-color-palette-item ${isActive ? 'active' : ''}">
+                                        <div class="dh-color-palette-label ${isActive ? 'active' : ''}">
+                                            <span>${name}</span>
+                                            ${isActive ? '<span class="text-blue-500 text-xs">●</span>' : ''}
                                         </div>
-                                        <div class="w-full h-2.5 rounded-full" style="background: ${gradient}"></div>
+                                        <div class="dh-color-gradient-bar" style="background: ${gradient}"></div>
                                     </div>
                                 `;
         }).join('')}
@@ -148,6 +356,290 @@ class DataHub {
             </div>
         `;
         document.getElementById('dh-content-area').innerHTML = html;
+        
+        // 使用 requestAnimationFrame 确保在浏览器渲染后再恢复滚动位置，避免视觉上的"抽搐"
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                const newScrollContainer = document.querySelector('.dh-color-palette-scroll');
+                if (newScrollContainer && scrollTop > 0) {
+                    newScrollContainer.scrollTop = scrollTop;
+                }
+                
+                // 绘制直方图（始终绘制，即使没有数据也显示空图表）
+                if (histogramData && breaks) {
+                    this.drawHistogram(histogramData, breaks);
+                } else {
+                    // 绘制空图表
+                    this.drawEmptyHistogram();
+                }
+            });
+        });
+    }
+    
+    // 计算直方图数据
+    calculateHistogram(values, breaks) {
+        if (!breaks || breaks.length < 2) return null;
+        
+        const bins = breaks.length - 1;
+        const histogram = new Array(bins).fill(0);
+        
+        values.forEach(val => {
+            // 找到值所在的区间
+            // breaks 数组：breaks[0] 是最小值，breaks[bins] 是最大值
+            // 区间 i: [breaks[i], breaks[i+1])，最后一个区间包含最大值
+            let placed = false;
+            for (let i = 0; i < bins; i++) {
+                if (i === bins - 1) {
+                    // 最后一个区间：包含最大值 [breaks[i], breaks[i+1]]
+                    if (val >= breaks[i] && val <= breaks[i + 1]) {
+                        histogram[i]++;
+                        placed = true;
+                        break;
+                    }
+                } else {
+                    // 其他区间：[breaks[i], breaks[i+1])
+                    if (val >= breaks[i] && val < breaks[i + 1]) {
+                        histogram[i]++;
+                        placed = true;
+                        break;
+                    }
+                }
+            }
+            // 如果还没放置（边界情况），放在最后一个bin
+            if (!placed) {
+                histogram[bins - 1]++;
+            }
+        });
+        
+        const maxCount = Math.max(...histogram, 1); // 确保至少为1，避免除零
+        
+        return {
+            bins: histogram,
+            breaks: breaks,
+            maxCount: maxCount,
+            min: Math.min(...values),
+            max: Math.max(...values)
+        };
+    }
+    
+    // 绘制空直方图
+    drawEmptyHistogram() {
+        const canvas = document.getElementById('histogram-canvas');
+        if (!canvas) return;
+        
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        
+        const container = canvas.parentElement;
+        const displayWidth = container ? container.clientWidth - 24 : 600;
+        const displayHeight = 180;
+        
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = displayWidth * dpr;
+        canvas.height = displayHeight * dpr;
+        canvas.style.width = displayWidth + 'px';
+        canvas.style.height = displayHeight + 'px';
+        ctx.scale(dpr, dpr);
+        
+        const width = displayWidth;
+        const height = displayHeight;
+        const padding = { top: 25, right: 15, bottom: 35, left: 45 };
+        const chartWidth = width - padding.left - padding.right;
+        const chartHeight = height - padding.top - padding.bottom;
+        
+        ctx.clearRect(0, 0, width, height);
+        
+        // 绘制坐标轴
+        ctx.strokeStyle = '#e0e0e0';
+        ctx.lineWidth = 1;
+        
+        // X轴
+        ctx.beginPath();
+        ctx.moveTo(padding.left, padding.top + chartHeight);
+        ctx.lineTo(padding.left + chartWidth, padding.top + chartHeight);
+        ctx.stroke();
+        
+        // Y轴
+        ctx.beginPath();
+        ctx.moveTo(padding.left, padding.top);
+        ctx.lineTo(padding.left, padding.top + chartHeight);
+        ctx.stroke();
+        
+        // 提示文字
+        ctx.fillStyle = '#999';
+        ctx.font = '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('请选择数据列以查看分布', width / 2, height / 2);
+    }
+    
+    // 绘制直方图
+    drawHistogram(histogramData, breaks) {
+        const canvas = document.getElementById('histogram-canvas');
+        if (!canvas) {
+            console.error('[直方图] Canvas元素不存在');
+            return;
+        }
+        
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+            console.error('[直方图] 无法获取Canvas上下文');
+            return;
+        }
+        
+        // 获取实际显示尺寸
+        const container = canvas.parentElement;
+        const displayWidth = container ? container.clientWidth - 24 : 600; // 减去padding (12px * 2)
+        const displayHeight = 180; // 增加高度
+        
+        // 设置Canvas实际尺寸（高DPI支持）
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = displayWidth * dpr;
+        canvas.height = displayHeight * dpr;
+        canvas.style.width = displayWidth + 'px';
+        canvas.style.height = displayHeight + 'px';
+        ctx.scale(dpr, dpr);
+        
+        const width = displayWidth;
+        const height = displayHeight;
+        const padding = { top: 35, right: 15, bottom: 30, left: 40 };
+        const chartWidth = width - padding.left - padding.right;
+        const chartHeight = height - padding.top - padding.bottom;
+        
+        // 清空画布
+        ctx.clearRect(0, 0, width, height);
+        
+        const bins = histogramData.bins;
+        const binWidth = bins.length > 0 ? chartWidth / bins.length : 0;
+        const maxCount = histogramData.maxCount;
+        const colors = COLOR_SCHEMES[this.currentScheme] || COLOR_SCHEMES['Blue-White'];
+        
+        // 安全检查
+        if (bins.length === 0 || maxCount === 0) {
+            console.error('[直方图] 没有数据可绘制', { bins, maxCount });
+            return;
+        }
+        
+        // 先绘制所有断点线（在柱状图之后绘制，避免被覆盖）
+        
+        // 绘制柱状图
+        if (bins.length === 0 || maxCount === 0) {
+            return;
+        }
+        
+        bins.forEach((count, i) => {
+            const barHeight = maxCount > 0 ? (count / maxCount) * chartHeight : 0;
+            
+            if (barHeight <= 0) return;
+            
+            const x = padding.left + i * binWidth;
+            const y = padding.top + chartHeight - barHeight;
+            
+            // 使用对应的颜色
+            const colorIndex = Math.min(i, colors.length - 1);
+            ctx.fillStyle = colors[colorIndex];
+            
+            // 绘制柱状图（确保最小宽度）
+            const rectWidth = Math.max(2, binWidth - 2);
+            ctx.fillRect(x + 1, y, rectWidth, barHeight);
+        });
+        
+        // 绘制断点线（在柱状图之后绘制）
+        bins.forEach((count, i) => {
+            if (i < breaks.length - 1) {
+                const x = padding.left + (i + 1) * binWidth;
+                ctx.strokeStyle = '#999';
+                ctx.lineWidth = 1;
+                ctx.setLineDash([3, 3]);
+                ctx.beginPath();
+                ctx.moveTo(x, padding.top);
+                ctx.lineTo(x, padding.top + chartHeight);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+        });
+        
+        // 设置样式（在绘制之前设置）
+        ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        
+        // 绘制坐标轴
+        ctx.strokeStyle = '#ccc';
+        ctx.lineWidth = 1;
+        
+        // X轴
+        ctx.beginPath();
+        ctx.moveTo(padding.left, padding.top + chartHeight);
+        ctx.lineTo(padding.left + chartWidth, padding.top + chartHeight);
+        ctx.stroke();
+        
+        // Y轴
+        ctx.beginPath();
+        ctx.moveTo(padding.left, padding.top);
+        ctx.lineTo(padding.left, padding.top + chartHeight);
+        ctx.stroke();
+        
+        // 绘制Y轴标签
+        ctx.fillStyle = '#666';
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
+        ctx.font = '9px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        const yTicks = 4;
+        for (let i = 0; i <= yTicks; i++) {
+            const value = Math.round((maxCount / yTicks) * i);
+            const y = padding.top + chartHeight - (i / yTicks) * chartHeight;
+            ctx.fillText(value.toString(), padding.left - 8, y);
+        }
+        
+        // 绘制X轴标签（断点值）
+        ctx.fillStyle = '#666';
+        ctx.font = '9px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        // 只显示部分标签，避免拥挤
+        const labelStep = Math.max(1, Math.floor(breaks.length / 5));
+        breaks.forEach((breakValue, i) => {
+            if (i % labelStep === 0 || i === breaks.length - 1) {
+                const x = padding.left + (i / (breaks.length - 1)) * chartWidth;
+                ctx.fillText(breakValue.toFixed(0), x, padding.top + chartHeight + 6);
+            }
+        });
+        
+        // 绘制标题
+        ctx.fillStyle = '#333';
+        ctx.font = 'bold 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(`数据分布 (${CLASSIFICATION_METHODS[this.currentClassification]})`, width / 2, 15);
+        
+        // 调试信息：打印到控制台
+        console.log('[直方图调试]', {
+            bins: bins.length,
+            maxCount: maxCount,
+            histogramData: histogramData.bins,
+            breaks: breaks
+        });
+    }
+    
+    // 字段改变时的处理
+    onFieldChange(fieldName) {
+        if (!fieldName) {
+            this.currentField = null;
+            this.renderSymbology();
+            return;
+        }
+        this.currentField = fieldName;
+        this.renderSymbology();
+        // 自动应用符号系统
+        this.applySymbology(fieldName, this.currentScheme);
+    }
+    
+    // 分类方法改变时的处理
+    onMethodChange(method) {
+        this.currentClassification = method;
+        this.renderSymbology();
+        // 重新应用符号系统
+        if (this.currentField) {
+            this.applySymbology(this.currentField, this.currentScheme);
+        }
     }
 
     // 核心渲染逻辑：修正颜色损坏问题
@@ -160,6 +652,8 @@ class DataHub {
         const values = this.data.map(d => parseFloat(d[fieldName])).filter(v => !isNaN(v));
         if (values.length === 0) return;
 
+        // 使用分类算法计算断点
+        const breaks = ClassificationAlgorithms.calculateBreaks(values, this.currentClassification, colors.length);
         const max = Math.max(...values);
         const min = Math.min(...values);
 
@@ -192,16 +686,31 @@ class DataHub {
 
             if (row && !isNaN(parseFloat(row[fieldName]))) {
                 const val = parseFloat(row[fieldName]);
-                const ratio = (max === min) ? 0 : (val - min) / (max - min);
-
+                
+                // 使用分类算法获取分类索引
+                const classIndex = ClassificationAlgorithms.getClassIndex(val, breaks);
+                const numClasses = colors.length;
+                
+                // 计算在该分类内的相对位置（用于颜色插值）
+                let localRatio = 0;
+                if (classIndex < breaks.length - 1) {
+                    const classMin = breaks[classIndex];
+                    const classMax = breaks[classIndex + 1];
+                    if (classMax > classMin) {
+                        localRatio = (val - classMin) / (classMax - classMin);
+                    }
+                }
+                
+                // 确保索引在有效范围内
+                const colorIdx = Math.min(classIndex, numClasses - 2);
+                
                 // 写入【数据专用】属性，不碰漫游属性
                 // 提高整体高度：基础高度从70000提高到150000，高度范围从300000提高到450000
                 // 最小值：150000（高于默认70000，避免下陷）
                 // 最大值：600000（比之前370000更高，视觉效果更明显）
-                s.targetH = 150000 + (ratio * 450000);
-
-                const colorIdx = Math.min(Math.floor(ratio * (colors.length - 1)), colors.length - 2);
-                const localRatio = (ratio * (colors.length - 1)) - colorIdx;
+                // 使用分类索引计算高度，而不是简单的比例
+                const heightRatio = breaks.length > 1 ? (classIndex / (breaks.length - 2)) : 0;
+                s.targetH = 150000 + (heightRatio * 450000);
 
                 // 存入 dataColor，而不是 customColor
                 s.dataColor = this.interpolateColor(colors[colorIdx], colors[colorIdx + 1], localRatio);
@@ -236,8 +745,23 @@ class DataHub {
             }
         });
 
+        // 只在符号系统标签页激活时才重新渲染，避免不必要的DOM更新
         if (document.getElementById('tab-btn-symbology').classList.contains('active')) {
+            // 保存滚动位置
+            const scrollContainer = document.querySelector('.dh-color-palette-scroll');
+            const scrollTop = scrollContainer ? scrollContainer.scrollTop : 0;
+            
             this.renderSymbology();
+            
+            // 恢复滚动位置（renderSymbology内部也会处理，这里作为双重保险）
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    const newScrollContainer = document.querySelector('.dh-color-palette-scroll');
+                    if (newScrollContainer && scrollTop > 0) {
+                        newScrollContainer.scrollTop = scrollTop;
+                    }
+                });
+            });
         }
         
         // 注意：按钮状态在数据导入成功时已经更新，这里不需要再次更新

@@ -13,7 +13,7 @@
     -webkit-font-smoothing: antialiased;
     transform: translateZ(0);
 
-    height: 400px;
+    height: 340px;
     background: rgba(255, 255, 255, 0.75);
     backdrop-filter: blur(25px) saturate(180%);
     -webkit-backdrop-filter: blur(25px) saturate(180%);
@@ -33,12 +33,34 @@
     transform: translateY(-470px);
 }
 
+/* 面板容器 */
+.dh-panel-container {
+    display: flex;
+    flex-direction: column;
+}
+
+/* 拖拽手柄 */
+.dh-drag-handle {
+    height: 12px;
+    width: 100%;
+    cursor: ns-resize;
+    flex-shrink: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
 /* Tab 切换栏 - 胶囊风格 */
 .dh-tabs {
     display: flex;
     padding: 16px 24px;
     align-items: center;
     gap: 8px;
+    flex-shrink: 0;
+}
+
+.dh-tabs-spacer {
+    flex: 1;
 }
 
 .dh-tab-btn {
@@ -150,4 +172,183 @@
 
 #dh-content-area::-webkit-scrollbar-thumb:hover {
     background: rgba(0, 0, 0, 0.2);
+}
+
+/* 直方图容器样式 */
+#histogram-container {
+    position: relative;
+}
+
+#histogram-canvas {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+/* 分类方法选择器样式 */
+#method-select {
+    transition: all 0.2s;
+}
+
+#method-select:hover {
+    background: rgba(0, 0, 0, 0.02);
+}
+
+#method-select:focus {
+    background: white;
+    box-shadow: 0 0 0 2px rgba(0, 113, 227, 0.2);
+}
+
+/* 符号系统布局 */
+.dh-symbology-layout {
+    display: flex;
+    gap: 20px;
+    height: 100%;
+    align-items: stretch;
+}
+
+.dh-symbology-left {
+    flex: 0 0 280px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.dh-symbology-center {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.dh-symbology-right {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.dh-controls-section {
+    flex-shrink: 0;
+}
+
+.dh-histogram-section {
+    flex-shrink: 0;
+}
+
+.dh-histogram-section label {
+    margin-bottom: 12px;
+    display: block;
+}
+
+.dh-color-palette-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 8px;
+    min-height: 0;
+}
+
+.dh-color-palette-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+}
+
+.dh-color-palette-item {
+    padding: 8px;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 1px solid transparent;
+}
+
+.dh-color-palette-item:hover {
+    background: white;
+    border-color: rgba(0, 0, 0, 0.1);
+}
+
+.dh-color-palette-item.active {
+    background: white;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border-color: rgba(59, 130, 246, 0.4);
+}
+
+.dh-color-palette-item:not(.active) {
+    background: rgba(249, 250, 251, 0.5);
+}
+
+.dh-color-palette-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    font-size: 10px;
+    font-weight: 600;
+}
+
+.dh-color-palette-label.active {
+    color: #2563eb;
+}
+
+.dh-color-palette-label:not(.active) {
+    color: #4b5563;
+}
+
+.dh-color-gradient-bar {
+    width: 100%;
+    height: 8px;
+    border-radius: 9999px;
+}
+
+/* 直方图容器样式增强 */
+#histogram-container {
+    background: white;
+    border-radius: 12px;
+    padding: 12px;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    height: 200px;
+}
+
+/* 表格样式增强 */
+.dh-table-wrapper {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.dh-table-scroll {
+    flex: 1;
+    overflow: auto;
+    border-radius: 12px;
+    border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.dh-table-header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: #f9fafb;
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.05);
+}
+
+.dh-table-header th {
+    padding: 12px 16px;
+    text-align: left;
+    font-size: 12px;
+    color: #9ca3af;
+}
+
+.dh-table-body {
+    background: white;
+}
+
+.dh-table-body tr {
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.dh-table-body td {
+    padding: 12px 16px;
+    font-size: 13px;
+    color: #4b5563;
 }
