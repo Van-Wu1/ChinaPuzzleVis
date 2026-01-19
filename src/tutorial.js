@@ -23,7 +23,7 @@ class Tutorial {
             },
             {
                 title: 'Step 2: 板块升起与自定义',
-                description: '1️⃣ <strong>左键点击</strong>任意省份，板块会升起<br>2️⃣ 升起后，<strong>右键点击</strong>该板块<br>3️⃣ 在弹出的定制面板中可以：<br>   • 修改颜色（预设色系或自定义）<br>   • 调整升起高度（100000-500000）<br>   • 调整板块厚度（20000-200000）',
+                description: '1. <strong>左键点击</strong>任意省份，板块会升起<br>2. 升起后，<strong>右键点击</strong>该板块<br>3. 在弹出的定制面板中可以：<br>   • 修改颜色（预设色系或自定义）<br>   • 调整升起高度（100000-500000）<br>   • 调整板块厚度（20000-200000）',
                 target: '#map',
                 position: 'bottom',
                 action: null
