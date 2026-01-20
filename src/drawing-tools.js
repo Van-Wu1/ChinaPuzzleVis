@@ -644,6 +644,8 @@ class DrawingTools {
             html += `
                 <div class="dt-row"><label><span>粗细</span><span>${obj.width.toFixed(1)}</span></label>
                 <input type="range" class="dt-range" min="0.1" max="2" step="0.1" value="${obj.width}" id="dt-width-input"></div>
+                <div class="dt-row"><label><span>升起高度</span><span>${Math.round(obj.height || this.height)}</span></label>
+                <input type="range" class="dt-range" min="100000" max="500000" step="10000" value="${Math.round(obj.height || this.height)}" id="dt-height-input"></div>
                 <div class="dt-row"><label><span>厚度</span><span>${Math.round(obj.thickness || 20000)}</span></label>
                 <input type="range" class="dt-range" min="1000" max="80000" step="1000" value="${Math.round(obj.thickness || 20000)}" id="dt-thickness-input"></div>
             `;
@@ -665,6 +667,10 @@ class DrawingTools {
                             <input type="range" class="dt-range" min="-1.2" max="1.2" step="0.01" value="${obj.curveAmount || 0}" id="dt-curve-input">
                         </div>
                     ` : ''}
+                    <div class="dt-row">
+                        <label><span>升起高度</span><span class="dt-chip">${Math.round(obj.height || this.height)}</span></label>
+                        <input type="range" class="dt-range" min="100000" max="500000" step="10000" value="${Math.round(obj.height || this.height)}" id="dt-height-input-arrow">
+                    </div>
                     <div class="dt-row" style="margin-bottom:0;">
                         <label><span>厚度</span><span class="dt-chip">${Math.round(obj.thickness || 20000)}</span></label>
                         <input type="range" class="dt-range" min="1000" max="80000" step="1000" value="${Math.round(obj.thickness || 20000)}" id="dt-thickness-input-arrow">
@@ -709,6 +715,8 @@ class DrawingTools {
                 <input type="range" class="dt-range" min="0.1" max="3" step="0.05" value="${obj.minorAxisScale || 1.0}" id="dt-minor-axis-input"></div>
                 <div class="dt-row"><label><span>旋转角度</span><span>${((obj.rotation || 0) * 180 / Math.PI).toFixed(0)}°</span></label>
                 <input type="range" class="dt-range" min="0" max="180" step="1" value="${((obj.rotation || 0) * 180 / Math.PI)}" id="dt-rotation-input"></div>
+                <div class="dt-row"><label><span>升起高度</span><span>${Math.round(obj.height || this.height)}</span></label>
+                <input type="range" class="dt-range" min="100000" max="500000" step="10000" value="${Math.round(obj.height || this.height)}" id="dt-height-input-circle"></div>
                 <div class="dt-row"><label><span>厚度</span><span>${Math.round(obj.thickness || 20000)}</span></label>
                 <input type="range" class="dt-range" min="1000" max="80000" step="1000" value="${Math.round(obj.thickness || 20000)}" id="dt-thickness-input-circle"></div>
                 <div class="dt-row"><label><span>内部空心</span><span>${hollowPct}%</span></label>
@@ -779,6 +787,9 @@ class DrawingTools {
         };
 
         bind('dt-width-input', 'width');
+        bind('dt-height-input', 'height', true, false, (val) => Math.round(val));
+        bind('dt-height-input-arrow', 'height', true, false, (val) => Math.round(val));
+        bind('dt-height-input-circle', 'height', true, false, (val) => Math.round(val));
         bind('dt-thickness-input', 'thickness', true, false, (val) => Math.round(val));
         bind('dt-thickness-input-circle', 'thickness', true, false, (val) => Math.round(val));
         bind('dt-thickness-input-arrow', 'thickness', true, false, (val) => Math.round(val));
@@ -837,14 +848,15 @@ class DrawingTools {
 
         // 控制框图层（3D边框，与箭头同一高度）
         // 注意：这个图层在箭头图层之后添加，所以会显示在箭头上方
+        // 控制框高度使用动态计算，在 _showControlBox 中设置
         this.map.addLayer({
             id: 'dt-control-box-layer',
             type: 'fill-extrusion',
             source: 'dt-control-box-source',
             paint: {
                 'fill-extrusion-color': '#0071e3',
-                'fill-extrusion-height': this.height + 1000, // 稍微高一点，确保在箭头上方
-                'fill-extrusion-base': this.height - 1000, // 形成细边框效果
+                'fill-extrusion-height': ['coalesce', ['get', 'height'], this.height + 1000], // 使用feature的height属性
+                'fill-extrusion-base': ['coalesce', ['get', 'base'], this.height - 1000], // 使用feature的base属性
                 'fill-extrusion-opacity': 0.4,
                 'fill-extrusion-opacity-transition': { duration: 0 }
             }
@@ -864,14 +876,15 @@ class DrawingTools {
         });
         
         // 控制点图层（3D圆柱体，与箭头同一高度）
+        // 控制点高度使用动态计算，在 _createControlHandles 中设置
         this.map.addLayer({
             id: 'dt-control-handles-layer',
             type: 'fill-extrusion',
             source: 'dt-control-handles-source',
             paint: {
                 'fill-extrusion-color': '#0071e3',
-                'fill-extrusion-height': this.height + 5000, // 稍微高一点，确保在箭头上方
-                'fill-extrusion-base': this.height - 5000,
+                'fill-extrusion-height': ['coalesce', ['get', 'height'], this.height + 5000], // 使用feature的height属性
+                'fill-extrusion-base': ['coalesce', ['get', 'base'], this.height - 5000], // 使用feature的base属性
                 'fill-extrusion-opacity': 1.0
             }
         });
@@ -900,6 +913,7 @@ class DrawingTools {
                 headBaseScale: 1.0,
                 headHeightScale: 1.0,
                 radiusScale: 1.0,
+                height: this.height, // 默认使用类的高度
                 thickness: 18000,
                 isOutline: false,
                 outlineWidth: 0.2,
@@ -917,6 +931,7 @@ class DrawingTools {
             // 针对箭头的默认美化：更细、更薄、默认科技蓝
             if (newObj.type === 'arrow') {
                 newObj.color = '#1D6FFF';
+                newObj.height = this.height; // 箭头也使用默认高度
                 newObj.thickness = 14000;
                 newObj.tailWidth = 0.45;
                 newObj.midWidth = 0.16;
@@ -1008,12 +1023,13 @@ class DrawingTools {
                     majorAxisScale: 1.0,
                     minorAxisScale: 1.0,
                     hollow: 0,
+                    height: this.height, // 预览时使用默认高度
                     thickness: this.currentTool === 'arrow' ? 14000 : 18000,
                     rotation: 0
                 };
                 const feats = this._generator.generate(tempObj);
                 const thickness = Math.max(0, tempObj.thickness ?? 20000);
-                const height = this.height;
+                const height = tempObj.height ?? this.height;
                 const base = height - thickness;
                 feats.forEach(f => {
                     if (!f.properties) f.properties = {};
@@ -1060,7 +1076,7 @@ class DrawingTools {
         this.objects.forEach(obj => {
             const feats = this._generator.generate(obj);
             const thickness = Math.max(0, obj.thickness ?? 20000);
-            const height = this.height;
+            const height = obj.height ?? this.height; // 使用对象的自定义高度，如果没有则使用默认高度
             const base = height - thickness;
             feats.forEach(f => {
                 if (!f.properties) f.properties = {};
@@ -1087,6 +1103,7 @@ class DrawingTools {
         } else {
             const inputs = {
                 'width': 'dt-width-input',
+                'height': ['dt-height-input', 'dt-height-input-circle', 'dt-height-input-arrow'], // 线/圆/箭头都可能有高度
                 'thickness': ['dt-thickness-input', 'dt-thickness-input-circle', 'dt-thickness-input-arrow'], // 线/圆/箭头都可能有厚度
                 'headBaseScale': 'dt-head-base-input',
                 'headHeightScale': 'dt-head-height-input',
@@ -1119,7 +1136,11 @@ class DrawingTools {
                             } else if (key.includes('Scale')) {
                                 valueDisplay.innerText = value.toFixed(2);
                             } else {
-                                valueDisplay.innerText = key === 'thickness' ? Math.round(value) : value.toFixed(1);
+                                if (key === 'thickness' || key === 'height') {
+                                    valueDisplay.innerText = Math.round(value);
+                                } else {
+                                    valueDisplay.innerText = value.toFixed(1);
+                                }
                             }
                         }
                     }
@@ -1247,10 +1268,19 @@ class DrawingTools {
             [bounds.minLng - innerPadding, bounds.maxLat + innerPadding]
         ];
         
+        // 获取对象的高度（使用自定义高度或默认高度）
+        const objHeight = obj.height ?? this.height;
+        const controlBoxHeight = objHeight + 1000; // 稍微高一点，确保在箭头上方
+        const controlBoxBase = objHeight - 1000; // 形成细边框效果
+        
         this.map.getSource('dt-control-box-source').setData({
             type: 'FeatureCollection',
             features: [{
                 type: 'Feature',
+                properties: {
+                    height: controlBoxHeight,
+                    base: controlBoxBase
+                },
                 geometry: {
                     type: 'Polygon',
                     coordinates: [outerCoords, innerCoords.reverse()] // 外框和内框形成边框效果
@@ -1298,10 +1328,20 @@ class DrawingTools {
             [bounds.minLng - innerPadding, bounds.maxLat + innerPadding]
         ];
         
+        // 获取当前选中对象的高度（如果有）
+        const currentObj = this.objects.find(o => o.id === this.selectedId);
+        const objHeight = currentObj && currentObj.height ? currentObj.height : this.height;
+        const controlBoxHeight = objHeight + 1000;
+        const controlBoxBase = objHeight - 1000;
+        
         this.map.getSource('dt-control-box-source').setData({
             type: 'FeatureCollection',
             features: [{
                 type: 'Feature',
+                properties: {
+                    height: controlBoxHeight,
+                    base: controlBoxBase
+                },
                 geometry: {
                     type: 'Polygon',
                     coordinates: [outerCoords, innerCoords.reverse()]
@@ -1360,6 +1400,11 @@ class DrawingTools {
             { lng: (bounds.minLng + bounds.maxLng) / 2, lat: (bounds.minLat + bounds.maxLat) / 2, type: 'center', index: 8, position: 'center' }
         ];
         
+        // 获取对象的高度（使用自定义高度或默认高度）
+        const objHeight = obj.height ?? this.height;
+        const handleHeight = objHeight + 5000; // 稍微高一点，确保在箭头上方
+        const handleBase = objHeight - 5000;
+        
         // 使用3D圆柱体显示控制点（与箭头同一高度）
         const handleFeatures = handlePositions.map(pos => {
             // 为每个控制点创建一个小的圆形（使用buffer）
@@ -1370,7 +1415,9 @@ class DrawingTools {
                 properties: {
                     index: pos.index,
                     type: pos.type,
-                    position: pos.position
+                    position: pos.position,
+                    height: handleHeight,
+                    base: handleBase
                 },
                 geometry: circle.geometry
             };
@@ -1455,7 +1502,9 @@ class DrawingTools {
             // 高度在屏幕上的投影偏移（像素）
             // 使用地图的像素比例来转换高度到像素
             const metersPerPixel = 40075017 / (256 * Math.pow(2, zoom)); // 每像素的米数
-            const heightInMeters = this.height;
+            // 使用对象的自定义高度，如果没有则使用默认高度
+            const objHeight = obj && obj.height ? obj.height : this.height;
+            const heightInMeters = objHeight;
             const heightInPixels = heightInMeters / metersPerPixel;
             // pitch导致的垂直偏移
             const verticalOffset = heightInPixels * Math.sin(pitchRad);
@@ -1587,6 +1636,11 @@ class DrawingTools {
                     }
                 });
                 
+                // 获取对象的高度（使用自定义高度或默认高度）
+                const objHeight = obj.height ?? this.height;
+                const handleHeight = objHeight + 5000;
+                const handleBase = objHeight - 5000;
+                
                 // 更新3D点图层（使用圆形）
                 const handleFeatures = this.controlHandles
                     .filter(h => h.position && h.position.type !== 'rotation')
@@ -1598,7 +1652,9 @@ class DrawingTools {
                             properties: {
                                 index: h.position.index,
                                 type: h.position.type,
-                                position: h.position.position
+                                position: h.position.position,
+                                height: handleHeight,
+                                base: handleBase
                             },
                             geometry: circle.geometry
                         };

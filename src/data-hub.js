@@ -1051,7 +1051,7 @@ class DataHub {
         
         if (!hasValidExtension) {
             if (window.showToast) {
-                window.showToast('文件格式不支持。请上传 .xlsx、.xls 或 .csv 格式的文件', 'error', 4000);
+                window.showToast('文件格式不支持。请上传 .xlsx、.xls 或 .csv 格式的文件', 'error', 15000);
             } else {
                 alert('文件格式不支持。请上传 .xlsx、.xls 或 .csv 格式的文件');
             }
@@ -1076,7 +1076,7 @@ class DataHub {
                     
                     if (!validation.valid) {
                         if (window.showToast) {
-                            window.showToast(validation.message, 'error', 4000);
+                            window.showToast(validation.message, 'error', 15000);
                         } else {
                             alert(validation.message);
                         }
@@ -1108,7 +1108,7 @@ class DataHub {
                 } else {
                     console.warn('[DataHub] 导入的数据为空');
                     if (window.showToast) {
-                        window.showToast('导入的文件中没有数据，请检查文件格式', 'warning', 4000);
+                        window.showToast('导入的文件中没有数据，请检查文件格式', 'warning', 15000);
                     } else {
                         alert('导入的文件中没有数据，请检查文件格式');
                     }
@@ -1121,7 +1121,7 @@ class DataHub {
             } catch (error) {
                 console.error('[DataHub] 文件解析失败:', error);
                 if (window.showToast) {
-                    window.showToast('文件解析失败，请确保文件格式正确（.xlsx、.xls 或 .csv），且文件未损坏', 'error', 4000);
+                    window.showToast('文件解析失败，请确保文件格式正确（.xlsx、.xls 或 .csv），且文件未损坏', 'error', 15000);
                 } else {
                     alert('文件解析失败，请确保文件格式正确（.xlsx、.xls 或 .csv），且文件未损坏');
                 }
@@ -1136,7 +1136,7 @@ class DataHub {
         reader.onerror = (error) => {
             console.error('[DataHub] 文件读取失败:', error);
             if (window.showToast) {
-                window.showToast('文件读取失败，请重试', 'error', 4000);
+                window.showToast('文件读取失败，请重试', 'error', 15000);
             } else {
                 alert('文件读取失败，请重试');
             }
